@@ -1,0 +1,170 @@
+# Roadmap
+
+Development is organized into phases. Each phase produces a playable (or at least demonstrable) milestone. The guiding principle is to get notes moving on a path with music as early as possible, then layer on complexity.
+
+## Phase 1 — Path & Notes (Foundation)
+
+**Goal:** A single hardcoded path with notes that travel along it. No audio, no scoring. Prove the core rendering and movement loop.
+
+- [x] Bevy project scaffolding with basic 2D camera
+- [x] Load Catmull-Rom spline from hardcoded control points using `bevy_math::cubic_splines`
+- [x] Render path using Bevy gizmos (`gizmos.linestrip_2d()`)
+- [x] Pre-compute arc-length lookup table for uniform-speed traversal
+- [x] Spawn note entities that move along the path at constant speed
+- [x] Basic `NoteProgress` component advancing over time
+- [x] Tap note positioned and rotated along path tangent (gizmo circles + tangent lines)
+
+**Milestone:** Notes visibly glide along a curved path on screen.
+
+## Phase 2 — Audio Sync
+
+**Goal:** Notes are synchronized to actual music. The conductor system drives all timing.
+
+- [ ] Integrate `bevy_kira_audio` (or `bevy_mod_kira`)
+- [ ] Implement `SongConductor` resource reading Kira clock ticks
+- [ ] Linear regression smoothing (rolling 10–15 sample window)
+- [ ] Drift detection and resync (>50ms threshold)
+- [ ] Note spawning driven by conductor look-ahead window (2–4 beats ahead)
+- [ ] Note movement driven by `conductor.current_beat` rather than wall time
+- [ ] Timing point support (BPM changes mid-song)
+
+**Milestone:** Notes arrive at the judgment point exactly when the beat hits in the music.
+
+## Phase 3 — Input & Hit Detection
+
+**Goal:** Players can hit notes and receive feedback. Basic keyboard input only.
+
+- [ ] Integrate `leafwing-input-manager` with Tap action
+- [ ] Read keyboard events via `EventReader<KeyboardInput>` (not polling)
+- [ ] Hit detection: compare input timestamp to nearest note's target beat
+- [ ] Timing window grading: GREAT / COOL / GOOD / MISS
+- [ ] Visual hit feedback (flash, scale pop, color change)
+- [ ] Miss feedback (note fades/falls off path)
+- [ ] Despawn notes after judgment (hit or miss)
+- [ ] Run at 144+ fps with `PresentMode::AutoNoVsync` for timing precision
+
+**Milestone:** Playable rhythm game loop — hit notes, see feedback, hear music.
+
+## Phase 4 — Scoring & Combo
+
+**Goal:** Full scoring system with chain mechanics.
+
+- [ ] `ScoreState` resource tracking score, chain, grade counts
+- [ ] Per-note score calculation weighted by total note count (850K play score pool)
+- [ ] Chain incrementing: +1 normal, +2 fever (≥10), +4 trance (≥100)
+- [ ] Chain reset on miss
+- [ ] Chain bonus calculation (100K pool)
+- [ ] Clear bonus (50K)
+- [ ] End-of-song results screen with grade rank (S++ through D)
+- [ ] HUD: real-time score, combo counter, grade distribution
+
+**Milestone:** Complete scoring loop with meaningful feedback on performance quality.
+
+## Phase 5 — Beat Map Format
+
+**Goal:** Charts loaded from files instead of hardcoded data.
+
+- [ ] Define `BeatMap` struct with serde Serialize/Deserialize
+- [ ] RON format: metadata, timing points, path segments, notes, events
+- [ ] Bevy asset loader via `bevy_common_assets`
+- [ ] Beat → time → path parameter resolution at load time
+- [ ] Song select screen (list available songs from `assets/songs/`)
+- [ ] Support multiple difficulties per song
+- [ ] Hand-author 2–3 test charts for development
+
+**Milestone:** New songs can be added by dropping a folder into `assets/songs/`.
+
+## Phase 6 — Gamepad Support & Additional Note Types
+
+**Goal:** Full controller support and the complete note type catalog.
+
+- [ ] Gamepad bindings via `leafwing-input-manager` (dual analog + bumpers)
+- [ ] Analog stick direction detection (8-way quantization with dead zone)
+- [ ] Implement Slide notes (directional input check)
+- [ ] Implement Hold notes (sustained input tracking with partial scoring)
+- [ ] Implement Scratch notes (zero-crossing gesture detection)
+- [ ] Implement Beat notes (alternating tap detection)
+- [ ] Implement Critical notes (simultaneous dual-press with ±30ms window)
+- [ ] Implement Dual Slide notes
+- [ ] Implement Ad-Lib notes (invisible, no miss penalty)
+- [ ] Per-player input remapping UI
+
+**Milestone:** All 10 note types functional on both keyboard and gamepad.
+
+## Phase 7 — Auto-Chart Generator
+
+**Goal:** Offline tool that produces playable charts from any audio file.
+
+- [ ] Separate binary crate (`tools/chart_gen`)
+- [ ] Audio decoding via symphonia
+- [ ] STFT computation via rustfft/realfft (2048 window, 512 hop, Hann)
+- [ ] Spectral flux onset detection with adaptive peak picking
+- [ ] Beat tracking via autocorrelation with ~120 BPM perceptual bias
+- [ ] Beat-grid quantization of onsets
+- [ ] Difficulty scaling via onset strength thresholding (Easy through Expert)
+- [ ] Audio-reactive path generation:
+  - [ ] Catmull-Rom splines with beat-aligned control points
+  - [ ] Sub-band energy mapping (bass → sweeps, highs → oscillations)
+  - [ ] Perlin noise modulation scaled by RMS energy
+  - [ ] Mean-reversion spring to prevent drift
+  - [ ] Curvature cap and screen bounds clamping
+- [ ] Output as `.ron` chart file
+
+**Milestone:** Run `chart_gen song.ogg --difficulty normal` and get a playable chart.
+
+## Phase 8 — Polish & Production Path Rendering
+
+**Goal:** Visual quality suitable for a public release.
+
+- [ ] Migrate path rendering from gizmos to `bevy_prototype_lyon`
+- [ ] Note type-specific sprites and animations
+- [ ] Hit effect particles (via `bevy_tweening` or custom)
+- [ ] FEVER / TRANCE visual escalation (path glow, background effects)
+- [ ] Camera look-ahead and zoom driven by chart events
+- [ ] Song preview on select screen
+- [ ] Calibration screen (tap-test for audio/visual/input offsets)
+- [ ] Settings menu (key bindings, offsets, volume, display)
+- [ ] Pause/resume during gameplay
+
+**Milestone:** The game looks and feels like a finished product.
+
+## Phase 9 — Editor (Stretch Goal)
+
+**Goal:** In-app beat map editor for community chart creation.
+
+- [ ] `bevy_egui` UI panels: timeline, properties, metadata
+- [ ] Spline drawing tool (click to place waypoints, drag to adjust)
+  - [ ] Consider `bevy_pen_tool` as a starting point for Bézier editing
+- [ ] Beat-grid note placement (snap to 1/1, 1/2, 1/4, 1/8, 1/16)
+- [ ] Note type selector
+- [ ] Camera event timeline
+- [ ] Real-time playback preview using the game's own renderer
+- [ ] Export to `.ron` format
+- [ ] Import/export JSON for web-based tooling interop
+
+**Milestone:** Charts can be created entirely within the application.
+
+## Phase 10 — Advanced Chart Generation (Stretch Goal)
+
+**Goal:** ML-enhanced chart quality for the auto-generator.
+
+- [ ] SuperFlux onset detection (max filtering before flux)
+- [ ] Sub-band onset detection for richer feature extraction
+- [ ] Self-similarity matrix from chroma features for section boundaries
+- [ ] Section-aware density variation (sparse verses, dense choruses)
+- [ ] Optional: madmom integration via aubio-rs or PyO3 for RNN onset detection
+- [ ] Optional: small CNN trained on mel spectrograms for onset probability
+- [ ] Note type assignment based on audio features (percussive → tap, sustained → hold, pitched bends → slide)
+
+**Milestone:** Auto-generated charts that feel like they understand the music's structure.
+
+## Non-Goals (For Now)
+
+These are explicitly out of scope for the initial development arc:
+
+- Multiplayer / online play
+- 3D rendering (paths and notes are 2D)
+- Mobile/touch input
+- Video background playback
+- Online leaderboards
+- Song download / marketplace

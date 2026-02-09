@@ -1,0 +1,24 @@
+[workspace]
+members = ["tools/chart_gen"]
+
+[package]
+name = "rhythm-rail"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92.0"
+
+[features]
+dev = ["bevy/dynamic_linking"]
+
+[dependencies]
+bevy = "0.18"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
