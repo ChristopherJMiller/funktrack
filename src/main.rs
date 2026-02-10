@@ -1,13 +1,18 @@
+mod audio;
+mod conductor;
 mod notes;
 mod path;
 
 use bevy::prelude::*;
 
+use audio::KiraPlugin;
+use conductor::ConductorPlugin;
 use notes::NotesPlugin;
 use path::PathPlugin;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 enum GameSet {
+    UpdateConductor,
     SpawnNotes,
     MoveNotes,
     Render,
@@ -25,10 +30,16 @@ fn main() {
         }))
         .configure_sets(
             Update,
-            (GameSet::SpawnNotes, GameSet::MoveNotes, GameSet::Render).chain(),
+            (
+                GameSet::UpdateConductor,
+                GameSet::SpawnNotes,
+                GameSet::MoveNotes,
+                GameSet::Render,
+            )
+                .chain(),
         )
         .add_systems(Startup, spawn_camera)
-        .add_plugins((PathPlugin, NotesPlugin))
+        .add_plugins((KiraPlugin, ConductorPlugin, PathPlugin, NotesPlugin))
         .run();
 }
 

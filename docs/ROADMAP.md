@@ -20,13 +20,13 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Notes are synchronized to actual music. The conductor system drives all timing.
 
-- [ ] Integrate `bevy_kira_audio` (or `bevy_mod_kira`)
-- [ ] Implement `SongConductor` resource reading Kira clock ticks
-- [ ] Linear regression smoothing (rolling 10–15 sample window)
-- [ ] Drift detection and resync (>50ms threshold)
-- [ ] Note spawning driven by conductor look-ahead window (2–4 beats ahead)
-- [ ] Note movement driven by `conductor.current_beat` rather than wall time
-- [ ] Timing point support (BPM changes mid-song)
+- [x] Integrate Kira 0.11 directly (thin `KiraPlugin` in `src/audio.rs`)
+- [x] Implement `SongConductor` resource reading Kira clock ticks
+- [x] Linear regression smoothing (rolling 15-sample window)
+- [x] Drift detection and resync (>50ms threshold, 3-frame hard resync)
+- [x] Note spawning driven by conductor look-ahead window (3 beats ahead)
+- [x] Note movement driven by `conductor.current_beat` rather than wall time
+- [x] Timing point support (BPM changes mid-song)
 
 **Milestone:** Notes arrive at the judgment point exactly when the beat hits in the music.
 

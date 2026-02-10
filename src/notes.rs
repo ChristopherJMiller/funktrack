@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::GameSet;
+use crate::conductor::SongConductor;
 use crate::path::SplinePath;
 
 pub struct NotesPlugin;
@@ -29,8 +30,9 @@ pub struct NoteType(pub NoteKind);
 
 #[derive(Component)]
 pub struct NoteTiming {
-    pub spawn_time: f32,
-    pub travel_duration: f32,
+    pub target_beat: f64,
+    pub spawn_beat: f64,
+    pub travel_beats: f64,
 }
 
 #[derive(Component)]
@@ -41,62 +43,72 @@ pub struct NoteAlive;
 
 // --- Resources ---
 
-struct QueuedNote {
-    spawn_time: f32,
-    travel_duration: f32,
+struct ChartNote {
+    target_beat: f64,
     kind: NoteKind,
 }
 
 #[derive(Resource)]
-pub struct NoteSpawnState {
-    queue: Vec<QueuedNote>,
+pub struct NoteQueue {
+    notes: Vec<ChartNote>,
     next_index: usize,
-    elapsed: f32,
+    look_ahead_beats: f64,
+    travel_beats: f64,
 }
 
 // --- Systems ---
 
 fn setup_note_queue(mut commands: Commands) {
-    let mut queue = Vec::with_capacity(20);
-    for i in 0..20 {
-        queue.push(QueuedNote {
-            spawn_time: i as f32 * 0.5,
-            travel_duration: 3.0,
+    let mut notes = Vec::with_capacity(40);
+    for i in 0..40 {
+        notes.push(ChartNote {
+            target_beat: 4.0 + i as f64,
             kind: NoteKind::Tap,
         });
     }
-    commands.insert_resource(NoteSpawnState {
-        queue,
+    commands.insert_resource(NoteQueue {
+        notes,
         next_index: 0,
-        elapsed: 0.0,
+        look_ahead_beats: 3.0,
+        travel_beats: 3.0,
     });
 }
 
-fn spawn_notes(mut commands: Commands, time: Res<Time>, mut state: ResMut<NoteSpawnState>) {
-    state.elapsed += time.delta_secs();
+fn spawn_notes(
+    mut commands: Commands,
+    conductor: Res<SongConductor>,
+    mut queue: ResMut<NoteQueue>,
+) {
+    if !conductor.playing {
+        return;
+    }
 
-    while state.next_index < state.queue.len() {
-        let note = &state.queue[state.next_index];
-        if state.elapsed < note.spawn_time {
+    let horizon = conductor.current_beat + queue.look_ahead_beats;
+
+    while queue.next_index < queue.notes.len() {
+        let note = &queue.notes[queue.next_index];
+        let spawn_beat = note.target_beat - queue.travel_beats;
+        if spawn_beat > horizon {
             break;
         }
         commands.spawn((
             NoteType(note.kind),
             NoteTiming {
-                spawn_time: note.spawn_time,
-                travel_duration: note.travel_duration,
+                target_beat: note.target_beat,
+                spawn_beat,
+                travel_beats: queue.travel_beats,
             },
             NoteProgress(0.0),
             NoteAlive,
         ));
-        state.next_index += 1;
+        queue.next_index += 1;
     }
 }
 
-fn move_notes(state: Res<NoteSpawnState>, mut query: Query<(&NoteTiming, &mut NoteProgress)>) {
+fn move_notes(conductor: Res<SongConductor>, mut query: Query<(&NoteTiming, &mut NoteProgress)>) {
     for (timing, mut progress) in &mut query {
-        let p = (state.elapsed - timing.spawn_time) / timing.travel_duration;
-        progress.0 = p.clamp(0.0, 1.0);
+        let p = (conductor.current_beat - timing.spawn_beat) / timing.travel_beats;
+        progress.0 = p.clamp(0.0, 1.0) as f32;
     }
 }
 
