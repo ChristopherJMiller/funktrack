@@ -122,4 +122,9 @@ fn render_path(spline: Res<SplinePath>, mut gizmos: Gizmos) {
         spline.curve.iter_positions(resolution),
         Color::srgb(0.0, 0.9, 0.9),
     );
+
+    // Judgment point — double white circle at end of path
+    let judgment_pos = spline.position_at_progress(1.0);
+    gizmos.circle_2d(judgment_pos, 20.0, Color::WHITE);
+    gizmos.circle_2d(judgment_pos, 22.0, Color::WHITE);
 }

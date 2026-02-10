@@ -11,10 +11,7 @@ impl Plugin for NotesPlugin {
         app.add_systems(Startup, setup_note_queue)
             .add_systems(Update, spawn_notes.in_set(GameSet::SpawnNotes))
             .add_systems(Update, move_notes.in_set(GameSet::MoveNotes))
-            .add_systems(
-                Update,
-                (render_notes, despawn_completed_notes).in_set(GameSet::Render),
-            );
+            .add_systems(Update, render_notes.in_set(GameSet::Render));
     }
 }
 
@@ -108,7 +105,7 @@ fn spawn_notes(
 fn move_notes(conductor: Res<SongConductor>, mut query: Query<(&NoteTiming, &mut NoteProgress)>) {
     for (timing, mut progress) in &mut query {
         let p = (conductor.current_beat - timing.spawn_beat) / timing.travel_beats;
-        progress.0 = p.clamp(0.0, 1.0) as f32;
+        progress.0 = p.max(0.0) as f32;
     }
 }
 
@@ -129,13 +126,3 @@ fn render_notes(
     }
 }
 
-fn despawn_completed_notes(
-    mut commands: Commands,
-    query: Query<(Entity, &NoteProgress), With<NoteAlive>>,
-) {
-    for (entity, progress) in &query {
-        if progress.0 >= 1.0 {
-            commands.entity(entity).despawn();
-        }
-    }
-}

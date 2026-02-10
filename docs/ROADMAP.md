@@ -34,14 +34,15 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Players can hit notes and receive feedback. Basic keyboard input only.
 
-- [ ] Integrate `leafwing-input-manager` with Tap action
-- [ ] Read keyboard events via `EventReader<KeyboardInput>` (not polling)
-- [ ] Hit detection: compare input timestamp to nearest note's target beat
-- [ ] Timing window grading: GREAT / COOL / GOOD / MISS
-- [ ] Visual hit feedback (flash, scale pop, color change)
-- [ ] Miss feedback (note fades/falls off path)
-- [ ] Despawn notes after judgment (hit or miss)
-- [ ] Run at 144+ fps with `PresentMode::AutoNoVsync` for timing precision
+- [x] Read keyboard messages via `MessageReader<KeyboardInput>` (Bevy 0.18 Messages API)
+- [x] Beat-stamped `TapInput` message from Space key press
+- [x] Hit detection: closest-note matching within timing windows
+- [x] Timing window grading: GREAT (≤25ms) / COOL (≤50ms) / GOOD (≤100ms) / MISS (>100ms)
+- [x] Y2K future punk hit feedback (expanding blast rings, starburst rays, diamond flash)
+- [x] Auto-miss detection for notes passing judgment point
+- [x] Despawn notes after judgment (hit or miss)
+- [x] Judgment point indicator (double white circle at end of path)
+- [x] Run at uncapped fps with `PresentMode::AutoNoVsync` for timing precision
 
 **Milestone:** Playable rhythm game loop — hit notes, see feedback, hear music.
 

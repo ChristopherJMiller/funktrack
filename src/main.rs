@@ -1,12 +1,17 @@
 mod audio;
 mod conductor;
+mod input;
+mod judgment;
 mod notes;
 mod path;
 
 use bevy::prelude::*;
+use bevy::window::PresentMode;
 
 use audio::KiraPlugin;
 use conductor::ConductorPlugin;
+use input::InputPlugin;
+use judgment::JudgmentPlugin;
 use notes::NotesPlugin;
 use path::PathPlugin;
 
@@ -14,7 +19,9 @@ use path::PathPlugin;
 enum GameSet {
     UpdateConductor,
     SpawnNotes,
+    ReadInput,
     MoveNotes,
+    CheckHits,
     Render,
 }
 
@@ -24,6 +31,7 @@ fn main() {
             primary_window: Some(Window {
                 title: "Rhythm Rail".into(),
                 resolution: (1280, 720).into(),
+                present_mode: PresentMode::AutoNoVsync,
                 ..default()
             }),
             ..default()
@@ -33,13 +41,22 @@ fn main() {
             (
                 GameSet::UpdateConductor,
                 GameSet::SpawnNotes,
+                GameSet::ReadInput,
                 GameSet::MoveNotes,
+                GameSet::CheckHits,
                 GameSet::Render,
             )
                 .chain(),
         )
         .add_systems(Startup, spawn_camera)
-        .add_plugins((KiraPlugin, ConductorPlugin, PathPlugin, NotesPlugin))
+        .add_plugins((
+            KiraPlugin,
+            ConductorPlugin,
+            PathPlugin,
+            NotesPlugin,
+            InputPlugin,
+            JudgmentPlugin,
+        ))
         .run();
 }
 
