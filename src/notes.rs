@@ -40,22 +40,22 @@ pub struct NoteAlive;
 
 // --- Resources ---
 
-struct ChartNote {
-    target_beat: f64,
-    kind: NoteKind,
+pub struct ChartNote {
+    pub target_beat: f64,
+    pub kind: NoteKind,
 }
 
 #[derive(Resource)]
 pub struct NoteQueue {
-    notes: Vec<ChartNote>,
-    next_index: usize,
-    look_ahead_beats: f64,
-    travel_beats: f64,
+    pub notes: Vec<ChartNote>,
+    pub next_index: usize,
+    pub look_ahead_beats: f64,
+    pub travel_beats: f64,
 }
 
 // --- Systems ---
 
-fn setup_note_queue(mut commands: Commands) {
+pub fn setup_note_queue(mut commands: Commands) {
     let mut notes = Vec::with_capacity(40);
     for i in 0..40 {
         notes.push(ChartNote {
@@ -125,4 +125,3 @@ fn render_notes(
         gizmos.line_2d(pos, pos + tangent * 20.0, tangent_color);
     }
 }
-

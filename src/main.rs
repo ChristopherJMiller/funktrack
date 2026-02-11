@@ -1,27 +1,34 @@
 mod audio;
 mod conductor;
+mod hud;
 mod input;
 mod judgment;
 mod notes;
 mod path;
+mod results;
+mod scoring;
 
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use audio::KiraPlugin;
 use conductor::ConductorPlugin;
+use hud::HudPlugin;
 use input::InputPlugin;
 use judgment::JudgmentPlugin;
 use notes::NotesPlugin;
 use path::PathPlugin;
+use results::ResultsPlugin;
+use scoring::ScoringPlugin;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-enum GameSet {
+pub(crate) enum GameSet {
     UpdateConductor,
     SpawnNotes,
     ReadInput,
     MoveNotes,
     CheckHits,
+    UpdateScore,
     Render,
 }
 
@@ -44,6 +51,7 @@ fn main() {
                 GameSet::ReadInput,
                 GameSet::MoveNotes,
                 GameSet::CheckHits,
+                GameSet::UpdateScore,
                 GameSet::Render,
             )
                 .chain(),
@@ -56,6 +64,9 @@ fn main() {
             NotesPlugin,
             InputPlugin,
             JudgmentPlugin,
+            ScoringPlugin,
+            HudPlugin,
+            ResultsPlugin,
         ))
         .run();
 }

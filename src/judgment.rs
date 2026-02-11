@@ -12,11 +12,16 @@ pub struct JudgmentPlugin;
 
 impl Plugin for JudgmentPlugin {
     fn build(&self, app: &mut App) {
+        app.add_message::<JudgmentResult>();
         app.add_systems(
             Update,
             (check_hits, despawn_missed)
                 .chain()
                 .in_set(GameSet::CheckHits),
+        )
+        .add_systems(
+            Update,
+            spawn_feedback.in_set(GameSet::UpdateScore),
         )
         .add_systems(
             Update,
@@ -27,7 +32,7 @@ impl Plugin for JudgmentPlugin {
 
 // --- Timing windows (milliseconds) ---
 
-const GREAT_WINDOW_MS: f64 = 25.0;
+const GREAT_WINDOW_MS: f64 = 20.0;
 const COOL_WINDOW_MS: f64 = 50.0;
 const GOOD_WINDOW_MS: f64 = 100.0;
 const MISS_WINDOW_MS: f64 = 100.0;
@@ -75,6 +80,13 @@ impl Judgment {
     }
 }
 
+/// Message emitted by check_hits/despawn_missed, consumed by spawn_feedback and update_score.
+#[derive(Message)]
+pub struct JudgmentResult {
+    pub judgment: Judgment,
+    pub position: Vec2,
+}
+
 #[derive(Component)]
 pub struct JudgmentFeedback {
     pub judgment: Judgment,
@@ -113,6 +125,7 @@ fn check_hits(
     notes: Query<(Entity, &NoteTiming), With<NoteAlive>>,
     conductor: Res<SongConductor>,
     spline: Res<SplinePath>,
+    mut results: MessageWriter<JudgmentResult>,
 ) {
     let mut consumed: Vec<Entity> = Vec::new();
 
@@ -148,11 +161,9 @@ fn check_hits(
             );
 
             commands.entity(entity).despawn();
-            commands.spawn(JudgmentFeedback {
+            results.write(JudgmentResult {
                 judgment: grade,
                 position: pos,
-                timer: FEEDBACK_LIFETIME,
-                max_time: FEEDBACK_LIFETIME,
             });
         }
     }
@@ -163,6 +174,7 @@ fn despawn_missed(
     notes: Query<(Entity, &NoteTiming), With<NoteAlive>>,
     conductor: Res<SongConductor>,
     spline: Res<SplinePath>,
+    mut results: MessageWriter<JudgmentResult>,
 ) {
     let miss_beats = ms_to_beats(MISS_WINDOW_MS, conductor.bpm);
 
@@ -173,13 +185,26 @@ fn despawn_missed(
             info!("MISS — note at beat {:.1} auto-missed", timing.target_beat);
 
             commands.entity(entity).despawn();
-            commands.spawn(JudgmentFeedback {
+            results.write(JudgmentResult {
                 judgment: Judgment::Miss,
                 position: pos,
-                timer: FEEDBACK_LIFETIME,
-                max_time: FEEDBACK_LIFETIME,
             });
         }
+    }
+}
+
+/// Reads JudgmentResult messages and spawns visual feedback entities.
+fn spawn_feedback(
+    mut commands: Commands,
+    mut results: MessageReader<JudgmentResult>,
+) {
+    for result in results.read() {
+        commands.spawn(JudgmentFeedback {
+            judgment: result.judgment,
+            position: result.position,
+            timer: FEEDBACK_LIFETIME,
+            max_time: FEEDBACK_LIFETIME,
+        });
     }
 }
 

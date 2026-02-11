@@ -37,7 +37,7 @@ Development is organized into phases. Each phase produces a playable (or at leas
 - [x] Read keyboard messages via `MessageReader<KeyboardInput>` (Bevy 0.18 Messages API)
 - [x] Beat-stamped `TapInput` message from Space key press
 - [x] Hit detection: closest-note matching within timing windows
-- [x] Timing window grading: GREAT (≤25ms) / COOL (≤50ms) / GOOD (≤100ms) / MISS (>100ms)
+- [x] Timing window grading: GREAT (≤20ms) / COOL (≤50ms) / GOOD (≤100ms) / MISS (>100ms)
 - [x] Y2K future punk hit feedback (expanding blast rings, starburst rays, diamond flash)
 - [x] Auto-miss detection for notes passing judgment point
 - [x] Despawn notes after judgment (hit or miss)
@@ -50,14 +50,16 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Full scoring system with chain mechanics.
 
-- [ ] `ScoreState` resource tracking score, chain, grade counts
-- [ ] Per-note score calculation weighted by total note count (850K play score pool)
-- [ ] Chain incrementing: +1 normal, +2 fever (≥10), +4 trance (≥100)
-- [ ] Chain reset on miss
-- [ ] Chain bonus calculation (100K pool)
-- [ ] Clear bonus (50K)
-- [ ] End-of-song results screen with grade rank (S++ through D)
-- [ ] HUD: real-time score, combo counter, grade distribution
+- [x] `JudgmentResult` message decoupling judgments from feedback/scoring consumers
+- [x] `ScoreState` resource tracking score, chain, grade counts
+- [x] Per-note score calculation weighted by total note count (850K play score pool)
+- [x] Chain incrementing: +1 normal, +2 fever (≥10), +4 trance (≥100)
+- [x] Chain reset on miss
+- [x] Chain bonus calculation (100K pool, capped)
+- [x] Clear bonus (50K)
+- [x] End-of-song results screen with grade rank (S++ through D)
+- [x] HUD: real-time score, combo counter with tier colors, grade distribution
+- [x] Unit tests for scoring math (grade multipliers, chain tiers, rank boundaries, perfect/miss edge cases)
 
 **Milestone:** Complete scoring loop with meaningful feedback on performance quality.
 
