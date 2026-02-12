@@ -34,8 +34,8 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Players can hit notes and receive feedback. Basic keyboard input only.
 
-- [x] Read keyboard messages via `MessageReader<KeyboardInput>` (Bevy 0.18 Messages API)
-- [x] Beat-stamped `TapInput` message from Space key press
+- [x] Read input via `leafwing-input-manager` `ActionState` (keyboard + gamepad unified)
+- [x] Beat-stamped `TapInput` message from Tap action (Space / gamepad South)
 - [x] Hit detection: closest-note matching within timing windows
 - [x] Timing window grading: GREAT (≤20ms) / COOL (≤50ms) / GOOD (≤100ms) / MISS (>100ms)
 - [x] Y2K future punk hit feedback (expanding blast rings, starburst rays, diamond flash)
@@ -85,7 +85,7 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Full controller support and the complete note type catalog.
 
-- [ ] Gamepad bindings via `leafwing-input-manager` (dual analog + bumpers)
+- [x] Gamepad bindings via `leafwing-input-manager` (D-pad nav, South/East buttons)
 - [ ] Analog stick direction detection (8-way quantization with dead zone)
 - [ ] Implement Slide notes (directional input check)
 - [ ] Implement Hold notes (sustained input tracking with partial scoring)

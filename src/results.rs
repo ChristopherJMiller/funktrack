@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use leafwing_input_manager::prelude::*;
 
 use crate::GameSet;
+use crate::action::GameAction;
 use crate::audio::{KiraContext, stop_song};
 use crate::conductor::SongConductor;
 use crate::beatmap::SelectedSong;
@@ -284,7 +286,7 @@ fn spawn_results_overlay(
 
                     // --- Dismiss hint ---
                     panel.spawn((
-                        Text::new("[SPACE]"),
+                        Text::new("[A / SPACE]"),
                         TextFont {
                             font_size: DISMISS_FONT,
                             ..default()
@@ -300,10 +302,10 @@ fn spawn_results_overlay(
 }
 
 fn dismiss_results(
-    keys: Res<ButtonInput<KeyCode>>,
+    action: Res<ActionState<GameAction>>,
     mut next_state: ResMut<NextState<GameScreen>>,
 ) {
-    if keys.just_pressed(KeyCode::Space) {
+    if action.just_pressed(&GameAction::Confirm) {
         info!("Results dismissed → Song Select");
         next_state.set(GameScreen::SongSelect);
     }

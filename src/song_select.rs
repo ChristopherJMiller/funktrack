@@ -1,5 +1,7 @@
 use bevy::prelude::*;
+use leafwing_input_manager::prelude::*;
 
+use crate::action::GameAction;
 use crate::beatmap::{Difficulty, DiscoveredSong, SelectedSong, discover_songs, load_chart};
 use crate::state::GameScreen;
 
@@ -217,7 +219,7 @@ fn setup_song_select(mut commands: Commands) {
             .with_children(|hints: &mut ChildSpawnerCommands| {
                 spawn_hint(hints, "UP/DOWN", "select");
                 spawn_hint(hints, "LEFT/RIGHT", "difficulty");
-                spawn_hint(hints, "SPACE", "play");
+                spawn_hint(hints, "A/SPACE", "play");
             });
         });
 
@@ -305,7 +307,7 @@ fn spawn_hint(parent: &mut ChildSpawnerCommands, key: &str, action: &str) {
 }
 
 fn navigate_songs(
-    keys: Res<ButtonInput<KeyCode>>,
+    action: Res<ActionState<GameAction>>,
     mut state: ResMut<SongSelectState>,
     mut commands: Commands,
     mut next_state: ResMut<NextState<GameScreen>>,
@@ -316,7 +318,7 @@ fn navigate_songs(
 
     let mut changed = false;
 
-    if keys.just_pressed(KeyCode::ArrowUp) {
+    if action.just_pressed(&GameAction::Up) {
         if state.selected_index > 0 {
             state.selected_index -= 1;
         } else {
@@ -327,13 +329,13 @@ fn navigate_songs(
         changed = true;
     }
 
-    if keys.just_pressed(KeyCode::ArrowDown) {
+    if action.just_pressed(&GameAction::Down) {
         state.selected_index = (state.selected_index + 1) % state.songs.len();
         state.selected_difficulty_index = 0;
         changed = true;
     }
 
-    if keys.just_pressed(KeyCode::ArrowLeft) {
+    if action.just_pressed(&GameAction::Left) {
         let diffs = state.available_difficulties();
         if !diffs.is_empty() && state.selected_difficulty_index > 0 {
             state.selected_difficulty_index -= 1;
@@ -341,7 +343,7 @@ fn navigate_songs(
         }
     }
 
-    if keys.just_pressed(KeyCode::ArrowRight) {
+    if action.just_pressed(&GameAction::Right) {
         let diffs = state.available_difficulties();
         if !diffs.is_empty() && state.selected_difficulty_index < diffs.len() - 1 {
             state.selected_difficulty_index += 1;
@@ -349,7 +351,7 @@ fn navigate_songs(
         }
     }
 
-    if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) {
+    if action.just_pressed(&GameAction::Confirm) {
         let Some(difficulty) = state.current_difficulty() else {
             warn!("No difficulty selected");
             return;

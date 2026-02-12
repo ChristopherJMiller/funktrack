@@ -1,3 +1,4 @@
+mod action;
 mod audio;
 mod beatmap;
 mod conductor;
@@ -14,6 +15,7 @@ mod state;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 
+use action::ActionPlugin;
 use audio::KiraPlugin;
 use beatmap::BeatMapPlugin;
 use conductor::ConductorPlugin;
@@ -66,6 +68,7 @@ fn main() {
         )
         .add_systems(Startup, spawn_camera)
         .add_plugins((
+            ActionPlugin,
             KiraPlugin,
             ConductorPlugin,
             PathPlugin,
