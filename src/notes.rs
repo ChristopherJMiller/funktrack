@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::GameSet;
+use crate::beatmap::SlideDirection;
 use crate::conductor::SongConductor;
 use crate::path::SplinePath;
 
@@ -19,10 +20,14 @@ impl Plugin for NotesPlugin {
 #[derive(Debug, Clone, Copy)]
 pub enum NoteKind {
     Tap,
+    Slide(SlideDirection),
 }
 
 #[derive(Component)]
 pub struct NoteType(pub NoteKind);
+
+#[derive(Component)]
+pub struct NoteDirection(pub SlideDirection);
 
 #[derive(Component)]
 pub struct NoteTiming {
@@ -74,7 +79,7 @@ fn spawn_notes(
         if spawn_beat > horizon {
             break;
         }
-        commands.spawn((
+        let entity = commands.spawn((
             NoteType(note.kind),
             NoteTiming {
                 target_beat: note.target_beat,
@@ -83,7 +88,10 @@ fn spawn_notes(
             },
             NoteProgress(0.0),
             NoteAlive,
-        ));
+        )).id();
+        if let NoteKind::Slide(dir) = note.kind {
+            commands.entity(entity).insert(NoteDirection(dir));
+        }
         queue.next_index += 1;
     }
 }
@@ -101,20 +109,54 @@ fn move_notes(
 }
 
 fn render_notes(
-    query: Query<&NoteProgress, With<NoteAlive>>,
+    query: Query<(&NoteProgress, &NoteType, Option<&NoteDirection>), With<NoteAlive>>,
     spline: Option<Res<SplinePath>>,
     mut gizmos: Gizmos,
 ) {
     let Some(spline) = spline else { return };
 
-    let note_color = Color::srgb(1.0, 0.4, 0.7);
+    let tap_color = Color::srgb(1.0, 0.4, 0.7);
     let tangent_color = Color::srgb(1.0, 0.8, 0.3);
+    let slide_color = Color::srgb(0.0, 0.9, 1.0);
 
-    for progress in &query {
+    for (progress, note_type, note_dir) in &query {
         let pos = spline.position_at_progress(progress.0);
-        let tangent = spline.tangent_at_progress(progress.0).normalize_or_zero();
 
-        gizmos.circle_2d(pos, 12.0, note_color);
-        gizmos.line_2d(pos, pos + tangent * 20.0, tangent_color);
+        match note_type.0 {
+            NoteKind::Tap => {
+                let tangent = spline.tangent_at_progress(progress.0).normalize_or_zero();
+                gizmos.circle_2d(pos, 12.0, tap_color);
+                gizmos.line_2d(pos, pos + tangent * 20.0, tangent_color);
+            }
+            NoteKind::Slide(_) => {
+                let dir_vec = note_dir
+                    .map(|d| d.0.to_vec2())
+                    .unwrap_or(Vec2::X);
+                let size = 14.0;
+
+                // Diamond outline
+                let up = pos + Vec2::Y * size;
+                let down = pos - Vec2::Y * size;
+                let left = pos - Vec2::X * size;
+                let right = pos + Vec2::X * size;
+                gizmos.line_2d(up, right, slide_color);
+                gizmos.line_2d(right, down, slide_color);
+                gizmos.line_2d(down, left, slide_color);
+                gizmos.line_2d(left, up, slide_color);
+
+                // Arrow shaft
+                let shaft_len = 10.0;
+                let shaft_start = pos - dir_vec * shaft_len * 0.5;
+                let shaft_end = pos + dir_vec * shaft_len * 0.5;
+                gizmos.line_2d(shaft_start, shaft_end, slide_color);
+
+                // Arrowhead
+                let perp = Vec2::new(-dir_vec.y, dir_vec.x);
+                let head_size = 5.0;
+                let head_base = shaft_end - dir_vec * head_size;
+                gizmos.line_2d(shaft_end, head_base + perp * head_size * 0.5, slide_color);
+                gizmos.line_2d(shaft_end, head_base - perp * head_size * 0.5, slide_color);
+            }
+        }
     }
 }

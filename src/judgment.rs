@@ -4,8 +4,8 @@ use bevy::prelude::*;
 
 use crate::GameSet;
 use crate::conductor::SongConductor;
-use crate::input::TapInput;
-use crate::notes::{NoteAlive, NoteTiming};
+use crate::input::{SlideInput, TapInput};
+use crate::notes::{NoteAlive, NoteDirection, NoteKind, NoteTiming, NoteType};
 use crate::path::SplinePath;
 use crate::state::GameScreen;
 
@@ -123,7 +123,8 @@ fn grade_timing(abs_diff_ms: f64) -> Option<Judgment> {
 fn check_hits(
     mut commands: Commands,
     mut tap_reader: MessageReader<TapInput>,
-    notes: Query<(Entity, &NoteTiming), With<NoteAlive>>,
+    mut slide_reader: MessageReader<SlideInput>,
+    notes: Query<(Entity, &NoteTiming, &NoteType, Option<&NoteDirection>), With<NoteAlive>>,
     conductor: Option<Res<SongConductor>>,
     spline: Option<Res<SplinePath>>,
     mut results: MessageWriter<JudgmentResult>,
@@ -132,10 +133,14 @@ fn check_hits(
     let Some(spline) = spline else { return };
     let mut consumed: Vec<Entity> = Vec::new();
 
+    // --- Tap inputs hit only Tap notes ---
     for tap in tap_reader.read() {
         let mut best: Option<(Entity, f64)> = None;
 
-        for (entity, timing) in &notes {
+        for (entity, timing, note_type, _) in &notes {
+            if !matches!(note_type.0, NoteKind::Tap) {
+                continue;
+            }
             if consumed.contains(&entity) {
                 continue;
             }
@@ -159,6 +164,56 @@ fn check_hits(
             info!(
                 "{} — {:.1}ms (beat diff {:.3})",
                 grade.label(),
+                diff_ms,
+                diff_ms * conductor.bpm / 60_000.0
+            );
+
+            commands.entity(entity).despawn();
+            results.write(JudgmentResult {
+                judgment: grade,
+                position: pos,
+            });
+        }
+    }
+
+    // --- Slide inputs hit only matching-direction Slide notes ---
+    for slide in slide_reader.read() {
+        let mut best: Option<(Entity, f64)> = None;
+
+        for (entity, timing, note_type, note_dir) in &notes {
+            if !matches!(note_type.0, NoteKind::Slide(_)) {
+                continue;
+            }
+            if consumed.contains(&entity) {
+                continue;
+            }
+            // Skip wrong direction
+            if let Some(nd) = note_dir {
+                if nd.0 != slide.direction {
+                    continue;
+                }
+            }
+
+            let diff_beats = (slide.beat - timing.target_beat).abs();
+            let diff_ms = beats_to_ms(diff_beats, conductor.bpm);
+
+            if diff_ms <= GOOD_WINDOW_MS {
+                if best.is_none() || diff_ms < best.unwrap().1 {
+                    best = Some((entity, diff_ms));
+                }
+            }
+        }
+
+        if let Some((entity, diff_ms)) = best {
+            consumed.push(entity);
+
+            let grade = grade_timing(diff_ms).unwrap();
+            let pos = spline.position_at_progress(1.0);
+
+            info!(
+                "{} (Slide {:?}) — {:.1}ms (beat diff {:.3})",
+                grade.label(),
+                slide.direction,
                 diff_ms,
                 diff_ms * conductor.bpm / 60_000.0
             );

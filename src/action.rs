@@ -52,6 +52,12 @@ impl GameAction {
         map.insert(Left, GamepadButton::DPadLeft);
         map.insert(Right, GamepadButton::DPadRight);
 
+        // Navigation — gamepad left stick
+        map.insert(Up, GamepadControlDirection::LEFT_UP);
+        map.insert(Down, GamepadControlDirection::LEFT_DOWN);
+        map.insert(Left, GamepadControlDirection::LEFT_LEFT);
+        map.insert(Right, GamepadControlDirection::LEFT_RIGHT);
+
         map
     }
 }
