@@ -13,6 +13,8 @@ dev = ["bevy/dynamic_linking"]
 [dependencies]
 bevy = "0.18"
 kira = "0.11"
+serde = { version = "1", features = ["derive"] }
+ron = "0.8"
 
 [profile.dev]
 opt-level = 1

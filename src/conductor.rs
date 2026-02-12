@@ -9,7 +9,6 @@ pub struct ConductorPlugin;
 
 impl Plugin for ConductorPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(SongConductor::new(120.0));
         app.add_systems(Update, update_conductor.in_set(GameSet::UpdateConductor));
     }
 }
@@ -99,8 +98,9 @@ fn linear_regression(samples: &VecDeque<(f64, f64)>) -> (f64, f64) {
 fn update_conductor(
     time: Res<Time<Real>>,
     ctx: NonSend<KiraContext>,
-    mut conductor: ResMut<SongConductor>,
+    conductor: Option<ResMut<SongConductor>>,
 ) {
+    let Some(mut conductor) = conductor else { return };
     let Some(ref clock) = ctx.clock else {
         return;
     };

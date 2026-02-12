@@ -1,18 +1,29 @@
 use bevy::prelude::*;
 
 use crate::GameSet;
+use crate::audio::{KiraContext, stop_song};
+use crate::conductor::SongConductor;
+use crate::beatmap::SelectedSong;
 use crate::judgment::JudgmentFeedback;
+use crate::notes::{NoteAlive, NoteQueue};
+use crate::path::SplinePath;
 use crate::scoring::{GradeRank, ScoreState};
+use crate::state::GameScreen;
 
 pub struct ResultsPlugin;
 
 impl Plugin for ResultsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(SongComplete(false))
-            .add_systems(
-                Update,
-                (check_song_end, dismiss_results).in_set(GameSet::Render),
-            );
+        app.add_systems(
+            Update,
+            check_song_end.in_set(GameSet::Render),
+        )
+        .add_systems(OnEnter(GameScreen::Results), spawn_results_overlay)
+        .add_systems(
+            Update,
+            dismiss_results.run_if(in_state(GameScreen::Results)),
+        )
+        .add_systems(OnExit(GameScreen::Results), cleanup_gameplay);
     }
 }
 
@@ -63,19 +74,20 @@ const DISMISS_FONT: f32 = 13.0;
 #[derive(Resource)]
 pub struct SongComplete(pub bool);
 
-/// Marker for the results overlay root so we can despawn it
-#[derive(Component)]
-struct ResultsOverlay;
-
 // --- Systems ---
 
 fn check_song_end(
-    mut commands: Commands,
     state: Option<Res<ScoreState>>,
-    mut complete: ResMut<SongComplete>,
+    complete: Option<ResMut<SongComplete>>,
     feedback_q: Query<&JudgmentFeedback>,
-    existing: Query<&ResultsOverlay>,
+    mut next_state: ResMut<NextState<GameScreen>>,
+    current_state: Res<State<GameScreen>>,
 ) {
+    if *current_state.get() != GameScreen::Playing {
+        return;
+    }
+
+    let Some(mut complete) = complete else { return };
     if complete.0 {
         return;
     }
@@ -86,7 +98,6 @@ fn check_song_end(
         return;
     }
 
-    // All notes judged?
     if state.notes_judged() < state.total_notes {
         return;
     }
@@ -96,39 +107,21 @@ fn check_song_end(
         return;
     }
 
-    // Don't spawn twice
-    if !existing.is_empty() {
-        return;
-    }
-
     complete.0 = true;
     info!(
         "Song complete! Score: {} | Rank: {}",
         state.total_score(),
         state.grade_rank().label()
     );
-    spawn_results_overlay(&mut commands, &state);
+    next_state.set(GameScreen::Results);
 }
 
-fn dismiss_results(
+fn spawn_results_overlay(
     mut commands: Commands,
-    keys: Res<ButtonInput<KeyCode>>,
-    complete: Res<SongComplete>,
-    overlay_q: Query<Entity, With<ResultsOverlay>>,
+    state: Option<Res<ScoreState>>,
 ) {
-    if !complete.0 {
-        return;
-    }
+    let Some(state) = state else { return };
 
-    if keys.just_pressed(KeyCode::Space) {
-        for entity in &overlay_q {
-            commands.entity(entity).despawn();
-        }
-        info!("Results dismissed");
-    }
-}
-
-fn spawn_results_overlay(commands: &mut Commands, state: &ScoreState) {
     let rank = state.grade_rank();
     let rank_color = grade_rank_color(rank);
 
@@ -140,7 +133,7 @@ fn spawn_results_overlay(commands: &mut Commands, state: &ScoreState) {
     commands
         // Full-screen backdrop
         .spawn((
-            ResultsOverlay,
+            DespawnOnExit(GameScreen::Results),
             Node {
                 position_type: PositionType::Absolute,
                 top: Val::Px(0.0),
@@ -304,6 +297,39 @@ fn spawn_results_overlay(commands: &mut Commands, state: &ScoreState) {
                     ));
                 });
         });
+}
+
+fn dismiss_results(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut next_state: ResMut<NextState<GameScreen>>,
+) {
+    if keys.just_pressed(KeyCode::Space) {
+        info!("Results dismissed → Song Select");
+        next_state.set(GameScreen::SongSelect);
+    }
+}
+
+fn cleanup_gameplay(
+    mut commands: Commands,
+    mut ctx: NonSendMut<KiraContext>,
+    note_entities: Query<Entity, With<NoteAlive>>,
+    feedback_entities: Query<Entity, With<JudgmentFeedback>>,
+) {
+    stop_song(&mut ctx);
+
+    commands.remove_resource::<SplinePath>();
+    commands.remove_resource::<NoteQueue>();
+    commands.remove_resource::<SongConductor>();
+    commands.remove_resource::<ScoreState>();
+    commands.remove_resource::<SongComplete>();
+    commands.remove_resource::<SelectedSong>();
+
+    for entity in &note_entities {
+        commands.entity(entity).despawn();
+    }
+    for entity in &feedback_entities {
+        commands.entity(entity).despawn();
+    }
 }
 
 fn spawn_breakdown_row(

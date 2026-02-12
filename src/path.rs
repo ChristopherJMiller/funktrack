@@ -1,11 +1,12 @@
 use bevy::prelude::*;
 
+use crate::GameSet;
+
 pub struct PathPlugin;
 
 impl Plugin for PathPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_path)
-            .add_systems(Update, render_path);
+        app.add_systems(Update, render_path.in_set(GameSet::Render));
     }
 }
 
@@ -83,6 +84,14 @@ pub struct SplinePath {
 }
 
 impl SplinePath {
+    /// Build a SplinePath from Catmull-Rom control points.
+    pub fn from_catmull_rom_points(points: Vec<Vec2>) -> Self {
+        let spline = CubicCardinalSpline::new_catmull_rom(points);
+        let curve = spline.to_curve().expect("need at least 4 control points");
+        let lut = ArcLengthLut::build(&curve, 1000);
+        Self { curve, lut }
+    }
+
     /// Sample position at normalized progress (0.0 = start, 1.0 = end).
     pub fn position_at_progress(&self, progress: f32) -> Vec2 {
         let distance = progress.clamp(0.0, 1.0) * self.lut.total_length();
@@ -98,25 +107,9 @@ impl SplinePath {
     }
 }
 
-fn setup_path(mut commands: Commands) {
-    // Hardcoded S-curve with 6 control points.
-    let control_points = vec![
-        Vec2::new(-500.0, -200.0),
-        Vec2::new(-250.0, 200.0),
-        Vec2::new(-50.0, -150.0),
-        Vec2::new(50.0, 150.0),
-        Vec2::new(250.0, -200.0),
-        Vec2::new(500.0, 200.0),
-    ];
+fn render_path(spline: Option<Res<SplinePath>>, mut gizmos: Gizmos) {
+    let Some(spline) = spline else { return };
 
-    let spline = CubicCardinalSpline::new_catmull_rom(control_points);
-    let curve = spline.to_curve().expect("need at least 4 control points");
-    let lut = ArcLengthLut::build(&curve, 1000);
-
-    commands.insert_resource(SplinePath { curve, lut });
-}
-
-fn render_path(spline: Res<SplinePath>, mut gizmos: Gizmos) {
     let resolution = 100 * spline.curve.segments().len();
     gizmos.linestrip_2d(
         spline.curve.iter_positions(resolution),

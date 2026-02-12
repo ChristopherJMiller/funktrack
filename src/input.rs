@@ -21,9 +21,10 @@ pub struct TapInput {
 
 fn read_tap_input(
     mut keys: MessageReader<KeyboardInput>,
-    conductor: Res<SongConductor>,
+    conductor: Option<Res<SongConductor>>,
     mut tap_writer: MessageWriter<TapInput>,
 ) {
+    let Some(conductor) = conductor else { return };
     for ev in keys.read() {
         if ev.state == ButtonState::Pressed && !ev.repeat && ev.key_code == KeyCode::Space {
             tap_writer.write(TapInput {

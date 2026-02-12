@@ -2,17 +2,15 @@ use bevy::prelude::*;
 
 use crate::GameSet;
 use crate::judgment::{Judgment, JudgmentResult};
-use crate::notes::{self, NoteQueue};
+use crate::notes::NoteQueue;
+use crate::state::GameScreen;
 
 pub struct ScoringPlugin;
 
 impl Plugin for ScoringPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Startup,
-            init_score_state.after(notes::setup_note_queue),
-        )
-        .add_systems(Update, update_score.in_set(GameSet::UpdateScore));
+        app.add_systems(OnEnter(GameScreen::Playing), init_score_state)
+            .add_systems(Update, update_score.in_set(GameSet::UpdateScore));
     }
 }
 
@@ -160,7 +158,8 @@ pub fn grade_rank_from_score(score: u64) -> GradeRank {
 
 // --- Systems ---
 
-fn init_score_state(mut commands: Commands, queue: Res<NoteQueue>) {
+fn init_score_state(mut commands: Commands, queue: Option<Res<NoteQueue>>) {
+    let Some(queue) = queue else { return };
     let total = queue.notes.len() as u32;
     let base_value = if total > 0 {
         PLAY_SCORE_POOL / total as f64
@@ -182,9 +181,10 @@ fn init_score_state(mut commands: Commands, queue: Res<NoteQueue>) {
 }
 
 fn update_score(
-    mut state: ResMut<ScoreState>,
+    state: Option<ResMut<ScoreState>>,
     mut results: MessageReader<JudgmentResult>,
 ) {
+    let Some(mut state) = state else { return };
     for result in results.read() {
         // Update grade counts
         match result.judgment {

@@ -7,6 +7,7 @@ use crate::conductor::SongConductor;
 use crate::input::TapInput;
 use crate::notes::{NoteAlive, NoteTiming};
 use crate::path::SplinePath;
+use crate::state::GameScreen;
 
 pub struct JudgmentPlugin;
 
@@ -123,10 +124,12 @@ fn check_hits(
     mut commands: Commands,
     mut tap_reader: MessageReader<TapInput>,
     notes: Query<(Entity, &NoteTiming), With<NoteAlive>>,
-    conductor: Res<SongConductor>,
-    spline: Res<SplinePath>,
+    conductor: Option<Res<SongConductor>>,
+    spline: Option<Res<SplinePath>>,
     mut results: MessageWriter<JudgmentResult>,
 ) {
+    let Some(conductor) = conductor else { return };
+    let Some(spline) = spline else { return };
     let mut consumed: Vec<Entity> = Vec::new();
 
     for tap in tap_reader.read() {
@@ -172,10 +175,12 @@ fn check_hits(
 fn despawn_missed(
     mut commands: Commands,
     notes: Query<(Entity, &NoteTiming), With<NoteAlive>>,
-    conductor: Res<SongConductor>,
-    spline: Res<SplinePath>,
+    conductor: Option<Res<SongConductor>>,
+    spline: Option<Res<SplinePath>>,
     mut results: MessageWriter<JudgmentResult>,
 ) {
+    let Some(conductor) = conductor else { return };
+    let Some(spline) = spline else { return };
     let miss_beats = ms_to_beats(MISS_WINDOW_MS, conductor.bpm);
 
     for (entity, timing) in &notes {
@@ -199,12 +204,15 @@ fn spawn_feedback(
     mut results: MessageReader<JudgmentResult>,
 ) {
     for result in results.read() {
-        commands.spawn(JudgmentFeedback {
-            judgment: result.judgment,
-            position: result.position,
-            timer: FEEDBACK_LIFETIME,
-            max_time: FEEDBACK_LIFETIME,
-        });
+        commands.spawn((
+            DespawnOnExit(GameScreen::Playing),
+            JudgmentFeedback {
+                judgment: result.judgment,
+                position: result.position,
+                timer: FEEDBACK_LIFETIME,
+                max_time: FEEDBACK_LIFETIME,
+            },
+        ));
     }
 }
 

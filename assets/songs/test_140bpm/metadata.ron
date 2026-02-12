@@ -1,0 +1,10 @@
+(
+    title: "Click Track 140",
+    artist: "Test",
+    charter: "Auto",
+    audio_file: "click.ogg",
+    preview_start_ms: 0,
+    preview_duration_ms: 15000,
+    source: "",
+    difficulties: [Hard],
+)

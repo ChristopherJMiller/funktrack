@@ -17,8 +17,6 @@ impl Plugin for KiraPlugin {
             clock: None,
             sound: None,
         });
-
-        app.add_systems(Startup, start_song);
     }
 }
 
@@ -48,6 +46,10 @@ pub fn play_song(ctx: &mut KiraContext, path: &str, bpm: f64) {
     ctx.sound = Some(sound);
 }
 
-fn start_song(mut ctx: NonSendMut<KiraContext>) {
-    play_song(&mut ctx, "assets/songs/test_120bpm/click.ogg", 120.0);
+pub fn stop_song(ctx: &mut KiraContext) {
+    if let Some(ref mut sound) = ctx.sound {
+        let _ = sound.stop(Default::default());
+    }
+    ctx.sound = None;
+    ctx.clock = None;
 }

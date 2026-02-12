@@ -2,12 +2,13 @@ use bevy::prelude::*;
 
 use crate::GameSet;
 use crate::scoring::{ChainTier, ScoreState};
+use crate::state::GameScreen;
 
 pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_hud)
+        app.add_systems(OnEnter(GameScreen::Playing), setup_hud)
             .add_systems(Update, update_hud.in_set(GameSet::Render));
     }
 }
@@ -76,6 +77,7 @@ fn setup_hud(mut commands: Commands) {
     // Root container — top-right corner, absolute positioned
     commands
         .spawn((
+            DespawnOnExit(GameScreen::Playing),
             Node {
                 position_type: PositionType::Absolute,
                 top: Val::Px(16.0),

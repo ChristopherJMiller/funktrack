@@ -67,13 +67,17 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Charts loaded from files instead of hardcoded data.
 
-- [ ] Define `BeatMap` struct with serde Serialize/Deserialize
-- [ ] RON format: metadata, timing points, path segments, notes, events
-- [ ] Bevy asset loader via `bevy_common_assets`
-- [ ] Beat → time → path parameter resolution at load time
-- [ ] Song select screen (list available songs from `assets/songs/`)
-- [ ] Support multiple difficulties per song
-- [ ] Hand-author 2–3 test charts for development
+- [x] Define serde-serializable chart structs (SongMetadata, ChartFile, full note/path/event enums)
+- [x] RON format: metadata, timing points, path segments, notes, events
+- [x] Direct filesystem loading with `std::fs` + `ron::de` (simpler than `bevy_common_assets`, matches Kira's direct file I/O)
+- [x] Game state machine: `GameScreen` (SongSelect → Playing → Results → SongSelect)
+- [x] `OnEnter(Playing)` setup builds SplinePath, NoteQueue, SongConductor from chart data
+- [x] `OnExit(Results)` cleanup removes all gameplay resources and stops audio
+- [x] Song select screen (scan `assets/songs/`, keyboard nav, Y2K punk aesthetic)
+- [x] Support multiple difficulties per song (Left/Right to switch)
+- [x] `DespawnOnExit` on UI entities for automatic cleanup on state transitions
+- [x] All existing systems tolerate missing resources via `Option<Res<T>>`
+- [x] Test charts: 120 BPM (Easy + Normal), 140 BPM (Hard with off-beat patterns)
 
 **Milestone:** New songs can be added by dropping a folder into `assets/songs/`.
 

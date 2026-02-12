@@ -1,4 +1,5 @@
 mod audio;
+mod beatmap;
 mod conductor;
 mod hud;
 mod input;
@@ -7,11 +8,14 @@ mod notes;
 mod path;
 mod results;
 mod scoring;
+mod song_select;
+mod state;
 
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use audio::KiraPlugin;
+use beatmap::BeatMapPlugin;
 use conductor::ConductorPlugin;
 use hud::HudPlugin;
 use input::InputPlugin;
@@ -20,6 +24,8 @@ use notes::NotesPlugin;
 use path::PathPlugin;
 use results::ResultsPlugin;
 use scoring::ScoringPlugin;
+use song_select::SongSelectPlugin;
+use state::{GameScreen, GameStatePlugin};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum GameSet {
@@ -43,6 +49,7 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(GameStatePlugin)
         .configure_sets(
             Update,
             (
@@ -54,7 +61,8 @@ fn main() {
                 GameSet::UpdateScore,
                 GameSet::Render,
             )
-                .chain(),
+                .chain()
+                .run_if(in_state(GameScreen::Playing)),
         )
         .add_systems(Startup, spawn_camera)
         .add_plugins((
@@ -67,6 +75,8 @@ fn main() {
             ScoringPlugin,
             HudPlugin,
             ResultsPlugin,
+            BeatMapPlugin,
+            SongSelectPlugin,
         ))
         .run();
 }

@@ -8,8 +8,7 @@ pub struct NotesPlugin;
 
 impl Plugin for NotesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_note_queue)
-            .add_systems(Update, spawn_notes.in_set(GameSet::SpawnNotes))
+        app.add_systems(Update, spawn_notes.in_set(GameSet::SpawnNotes))
             .add_systems(Update, move_notes.in_set(GameSet::MoveNotes))
             .add_systems(Update, render_notes.in_set(GameSet::Render));
     }
@@ -55,27 +54,14 @@ pub struct NoteQueue {
 
 // --- Systems ---
 
-pub fn setup_note_queue(mut commands: Commands) {
-    let mut notes = Vec::with_capacity(40);
-    for i in 0..40 {
-        notes.push(ChartNote {
-            target_beat: 4.0 + i as f64,
-            kind: NoteKind::Tap,
-        });
-    }
-    commands.insert_resource(NoteQueue {
-        notes,
-        next_index: 0,
-        look_ahead_beats: 3.0,
-        travel_beats: 3.0,
-    });
-}
-
 fn spawn_notes(
     mut commands: Commands,
-    conductor: Res<SongConductor>,
-    mut queue: ResMut<NoteQueue>,
+    conductor: Option<Res<SongConductor>>,
+    queue: Option<ResMut<NoteQueue>>,
 ) {
+    let Some(conductor) = conductor else { return };
+    let Some(mut queue) = queue else { return };
+
     if !conductor.playing {
         return;
     }
@@ -102,7 +88,12 @@ fn spawn_notes(
     }
 }
 
-fn move_notes(conductor: Res<SongConductor>, mut query: Query<(&NoteTiming, &mut NoteProgress)>) {
+fn move_notes(
+    conductor: Option<Res<SongConductor>>,
+    mut query: Query<(&NoteTiming, &mut NoteProgress)>,
+) {
+    let Some(conductor) = conductor else { return };
+
     for (timing, mut progress) in &mut query {
         let p = (conductor.current_beat - timing.spawn_beat) / timing.travel_beats;
         progress.0 = p.max(0.0) as f32;
@@ -111,9 +102,11 @@ fn move_notes(conductor: Res<SongConductor>, mut query: Query<(&NoteTiming, &mut
 
 fn render_notes(
     query: Query<&NoteProgress, With<NoteAlive>>,
-    spline: Res<SplinePath>,
+    spline: Option<Res<SplinePath>>,
     mut gizmos: Gizmos,
 ) {
+    let Some(spline) = spline else { return };
+
     let note_color = Color::srgb(1.0, 0.4, 0.7);
     let tangent_color = Color::srgb(1.0, 0.8, 0.3);
 
