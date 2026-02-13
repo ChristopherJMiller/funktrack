@@ -329,6 +329,20 @@ fn setup_playing(
                     kind: NoteKind::Slide(direction),
                 });
             }
+            ChartNoteType::Hold { duration_beats } => {
+                if duration_beats < 0.25 {
+                    // Too short for a hold — treat as tap
+                    notes.push(ChartNote {
+                        target_beat: entry.beat,
+                        kind: NoteKind::Tap,
+                    });
+                } else {
+                    notes.push(ChartNote {
+                        target_beat: entry.beat,
+                        kind: NoteKind::Hold { end_beat: entry.beat + duration_beats },
+                    });
+                }
+            }
             ref other => {
                 warn!("Unsupported note type {:?}, skipping", std::mem::discriminant(other));
             }

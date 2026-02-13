@@ -88,7 +88,7 @@ Development is organized into phases. Each phase produces a playable (or at leas
 - [x] Gamepad bindings via `leafwing-input-manager` (D-pad nav, South/East buttons)
 - [x] Analog stick direction detection (8-way quantization with dead zone)
 - [x] Implement Slide notes (directional input check)
-- [ ] Implement Hold notes (sustained input tracking with partial scoring)
+- [x] Implement Hold notes (sustained input tracking with partial scoring)
 - [ ] Implement Scratch notes (zero-crossing gesture detection)
 - [ ] Implement Beat notes (alternating tap detection)
 - [ ] Implement Critical notes (simultaneous dual-press with ±30ms window)

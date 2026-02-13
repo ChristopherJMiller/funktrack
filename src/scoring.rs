@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::GameSet;
 use crate::judgment::{Judgment, JudgmentResult};
-use crate::notes::NoteQueue;
+use crate::notes::{NoteKind, NoteQueue};
 use crate::state::GameScreen;
 
 pub struct ScoringPlugin;
@@ -160,7 +160,10 @@ pub fn grade_rank_from_score(score: u64) -> GradeRank {
 
 fn init_score_state(mut commands: Commands, queue: Option<Res<NoteQueue>>) {
     let Some(queue) = queue else { return };
-    let total = queue.notes.len() as u32;
+    let total: u32 = queue.notes.iter().map(|n| match n.kind {
+        NoteKind::Hold { .. } => 2u32,
+        _ => 1u32,
+    }).sum();
     let base_value = if total > 0 {
         PLAY_SCORE_POOL / total as f64
     } else {

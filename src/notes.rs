@@ -21,6 +21,18 @@ impl Plugin for NotesPlugin {
 pub enum NoteKind {
     Tap,
     Slide(SlideDirection),
+    Hold { end_beat: f64 },
+}
+
+#[derive(Component)]
+pub struct HoldEndBeat(pub f64);
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldState {
+    Pending,
+    Held,
+    Completed,
+    Dropped,
 }
 
 #[derive(Component)]
@@ -89,8 +101,14 @@ fn spawn_notes(
             NoteProgress(0.0),
             NoteAlive,
         )).id();
-        if let NoteKind::Slide(dir) = note.kind {
-            commands.entity(entity).insert(NoteDirection(dir));
+        match note.kind {
+            NoteKind::Slide(dir) => {
+                commands.entity(entity).insert(NoteDirection(dir));
+            }
+            NoteKind::Hold { end_beat } => {
+                commands.entity(entity).insert((HoldEndBeat(end_beat), HoldState::Pending));
+            }
+            _ => {}
         }
         queue.next_index += 1;
     }
@@ -109,18 +127,26 @@ fn move_notes(
 }
 
 fn render_notes(
-    query: Query<(&NoteProgress, &NoteType, Option<&NoteDirection>), With<NoteAlive>>,
+    query: Query<
+        (&NoteProgress, &NoteType, Option<&NoteDirection>, Option<&HoldEndBeat>, Option<&HoldState>, &NoteTiming),
+        With<NoteAlive>,
+    >,
+    conductor: Option<Res<SongConductor>>,
     spline: Option<Res<SplinePath>>,
     mut gizmos: Gizmos,
 ) {
     let Some(spline) = spline else { return };
+    let Some(conductor) = conductor else { return };
 
     let tap_color = Color::srgb(1.0, 0.4, 0.7);
     let tangent_color = Color::srgb(1.0, 0.8, 0.3);
     let slide_color = Color::srgb(0.0, 0.9, 1.0);
+    let hold_color = Color::srgb(1.0, 0.85, 0.15);
+    let hold_held_color = Color::srgb(1.0, 0.95, 0.5);
+    let hold_dropped_color = Color::srgb(0.5, 0.4, 0.1);
 
-    for (progress, note_type, note_dir) in &query {
-        let pos = spline.position_at_progress(progress.0);
+    for (progress, note_type, note_dir, _hold_end, hold_state, timing) in &query {
+        let pos = spline.position_at_progress(progress.0.min(1.0));
 
         match note_type.0 {
             NoteKind::Tap => {
@@ -156,6 +182,55 @@ fn render_notes(
                 let head_base = shaft_end - dir_vec * head_size;
                 gizmos.line_2d(shaft_end, head_base + perp * head_size * 0.5, slide_color);
                 gizmos.line_2d(shaft_end, head_base - perp * head_size * 0.5, slide_color);
+            }
+            NoteKind::Hold { end_beat } => {
+                let state = hold_state.copied().unwrap_or(HoldState::Pending);
+                let color = match state {
+                    HoldState::Held => hold_held_color,
+                    HoldState::Dropped => hold_dropped_color,
+                    _ => hold_color,
+                };
+
+                // Head position: clamp to 1.0 once held (stays at judgment line)
+                let head_p = if state == HoldState::Held {
+                    progress.0.min(1.0)
+                } else {
+                    progress.0
+                };
+                let head_pos = spline.position_at_progress(head_p.min(1.0));
+
+                // Tail position: travels along the spline behind the head
+                let tail_spawn_beat = end_beat - timing.travel_beats;
+                let tail_p = ((conductor.current_beat - tail_spawn_beat) / timing.travel_beats)
+                    .clamp(0.0, 1.0) as f32;
+                let tail_pos = spline.position_at_progress(tail_p);
+
+                // Body ribbon: line segments along spline between tail and head
+                let segments = 16;
+                let p_start = tail_p.min(head_p);
+                let p_end = tail_p.max(head_p);
+                if p_end > p_start {
+                    let step = (p_end - p_start) / segments as f32;
+                    for i in 0..segments {
+                        let pa = p_start + step * i as f32;
+                        let pb = p_start + step * (i + 1) as f32;
+                        let a = spline.position_at_progress(pa);
+                        let b = spline.position_at_progress(pb);
+                        let tangent_a = spline.tangent_at_progress(pa).normalize_or_zero();
+                        let tangent_b = spline.tangent_at_progress(pb).normalize_or_zero();
+                        let perp_a = Vec2::new(-tangent_a.y, tangent_a.x) * 4.0;
+                        let perp_b = Vec2::new(-tangent_b.y, tangent_b.x) * 4.0;
+                        gizmos.line_2d(a + perp_a, b + perp_b, color);
+                        gizmos.line_2d(a - perp_a, b - perp_b, color);
+                    }
+                }
+
+                // Head: double circle
+                gizmos.circle_2d(head_pos, 14.0, color);
+                gizmos.circle_2d(head_pos, 11.0, color);
+
+                // Tail: smaller circle
+                gizmos.circle_2d(tail_pos, 8.0, color);
             }
         }
     }
