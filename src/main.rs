@@ -5,6 +5,7 @@ mod calibration;
 mod camera;
 mod conductor;
 mod config;
+mod editor;
 mod hud;
 mod input;
 mod judgment;
@@ -29,6 +30,7 @@ use calibration::CalibrationPlugin;
 use camera::CameraPlugin;
 use conductor::ConductorPlugin;
 use config::ConfigPlugin;
+use editor::EditorPluginBundle;
 use hud::HudPlugin;
 use input::InputPlugin;
 use judgment::JudgmentPlugin;
@@ -104,6 +106,7 @@ fn main() {
             ConfigPlugin,
             CalibrationPlugin,
         ))
+        .add_plugins(EditorPluginBundle)
         .run();
 }
 

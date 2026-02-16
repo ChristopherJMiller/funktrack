@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::audio::{KiraContext, play_song};
 use crate::conductor::{SongConductor, TimingPoint};
@@ -21,7 +21,7 @@ impl Plugin for BeatMapPlugin {
 
 // --- Serde data structures ---
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SongMetadata {
     pub title: String,
     pub artist: String,
@@ -41,7 +41,7 @@ fn default_preview_duration() -> u64 {
     15000
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Difficulty {
     Easy,
     Normal,
@@ -69,7 +69,7 @@ impl Difficulty {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChartFile {
     pub difficulty: Difficulty,
     #[serde(default)]
@@ -93,7 +93,7 @@ fn default_look_ahead() -> f64 {
     3.0
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChartTimingPoint {
     pub beat: f64,
     pub bpm: f64,
@@ -105,7 +105,7 @@ fn default_time_sig() -> (u32, u32) {
     (4, 4)
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PathSegment {
     CatmullRom {
         points: Vec<(f32, f32)>,
@@ -133,13 +133,13 @@ pub enum PathSegment {
     },
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChartNoteEntry {
     pub beat: f64,
     pub note_type: ChartNoteType,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChartNoteType {
     Tap,
     Hold { duration_beats: f64 },
@@ -153,7 +153,7 @@ pub enum ChartNoteType {
     AdLib,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SlideDirection {
     N, NE, E, SE, S, SW, W, NW,
 }
@@ -198,13 +198,13 @@ impl SlideDirection {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChartEvent {
     pub beat: f64,
     pub event: EventType,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventType {
     CameraZoom { scale: f32, duration_beats: f64 },
     CameraPan { offset: (f32, f32), duration_beats: f64 },

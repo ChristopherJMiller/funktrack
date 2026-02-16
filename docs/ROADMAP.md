@@ -135,19 +135,30 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Milestone:** The game looks and feels like a finished product.
 
-## Phase 9 — Editor (Stretch Goal)
+## Phase 9 — Editor
 
 **Goal:** In-app beat map editor for community chart creation.
 
-- [ ] `bevy_egui` UI panels: timeline, properties, metadata
-- [ ] Spline drawing tool (click to place waypoints, drag to adjust)
-  - [ ] Consider `bevy_pen_tool` as a starting point for Bézier editing
-- [ ] Beat-grid note placement (snap to 1/1, 1/2, 1/4, 1/8, 1/16)
-- [ ] Note type selector
-- [ ] Camera event timeline
-- [ ] Real-time playback preview using the game's own renderer
-- [ ] Export to `.ron` format
-- [ ] Import/export JSON for web-based tooling interop
+- [x] `bevy_egui` 0.39 UI panels with Y2K Future Punk theme
+- [x] Dual-mode editor architecture:
+  - [x] **Chart mode** — timeline-dominant with lane-based note visualization (8 lanes), beat grid, playhead cursor, hold-duration bars, scroll-to-zoom
+  - [x] **Path mode** — viewport-dominant with lyon-rendered spline preview, Ctrl+Click to add control points, click+drag to move
+  - [x] Tab key to switch modes instantly
+- [x] Beat-grid note placement (snap to 1/1, 1/2, 1/4, 1/8, 1/16) via `GridSnap` with `[`/`]` cycling
+- [x] Note brush selector (all 8 note types, keys 1-8)
+- [x] Spline drawing tool (click to place waypoints, drag to adjust control points)
+- [x] Real-time playback preview (Space to play/pause, arrow keys to scrub)
+- [x] Undo/redo system (Ctrl+Z/Y) with command pattern (`EditorAction` enum)
+- [x] Metadata editing panel (title, artist, charter, travel beats, look-ahead)
+- [x] Selection system with properties inspector
+- [x] Export to `.ron` format (Ctrl+S)
+- [x] Export JSON for web-based tooling interop
+- [x] JSON import support
+- [x] Toast notification system for save feedback
+- [x] Editor camera with scroll-to-zoom
+- [ ] Waveform/audio visualization in timeline
+- [ ] Camera event timeline track
+- [ ] Autosave
 
 **Milestone:** Charts can be created entirely within the application.
 

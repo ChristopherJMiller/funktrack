@@ -9,6 +9,7 @@ pub enum GameScreen {
     Results,
     Settings,
     Calibration,
+    Editor,
 }
 
 pub struct GameStatePlugin;

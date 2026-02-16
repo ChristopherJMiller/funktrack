@@ -5,6 +5,7 @@ use crate::action::GameAction;
 use crate::audio::{KiraContext, play_preview, stop_preview};
 use crate::beatmap::{Difficulty, DiscoveredSong, SelectedSong, discover_songs, load_chart};
 use crate::config::GameSettings;
+use crate::editor::EditingSong;
 use crate::state::GameScreen;
 
 pub struct SongSelectPlugin;
@@ -230,6 +231,7 @@ fn setup_song_select(mut commands: Commands, mut ctx: NonSendMut<KiraContext>, s
                 spawn_hint(hints, "UP/DOWN", "select");
                 spawn_hint(hints, "LEFT/RIGHT", "difficulty");
                 spawn_hint(hints, "A/SPACE", "play");
+                spawn_hint(hints, "E", "edit");
                 spawn_hint(hints, "TAB", "settings");
             });
         });
@@ -413,6 +415,35 @@ fn navigate_songs(
             }
             Err(err) => {
                 error!("Failed to load chart: {}", err);
+            }
+        }
+    }
+
+    // E → Editor screen
+    if keys.just_pressed(KeyCode::KeyE) {
+        let Some(difficulty) = state.current_difficulty() else {
+            warn!("No difficulty selected");
+            return;
+        };
+
+        let song = &state.songs[state.selected_index];
+        match load_chart(&song.dir, difficulty) {
+            Ok(chart) => {
+                info!(
+                    "Editing: {} [{}]",
+                    song.metadata.title,
+                    difficulty.label()
+                );
+                commands.insert_resource(EditingSong {
+                    song_dir: song.dir.clone(),
+                    difficulty,
+                    metadata: song.metadata.clone(),
+                    chart,
+                });
+                next_state.set(GameScreen::Editor);
+            }
+            Err(err) => {
+                error!("Failed to load chart for editing: {}", err);
             }
         }
     }
