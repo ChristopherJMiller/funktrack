@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::GameSet;
 use crate::beatmap::{EventType, SelectedSong};
 use crate::conductor::SongConductor;
-use crate::notes::NoteQueue;
+use crate::notes::Playhead;
 use crate::path::SplinePath;
 use crate::state::GameScreen;
 
@@ -14,7 +14,7 @@ impl Plugin for CameraPlugin {
         app.add_systems(OnEnter(GameScreen::Playing), init_camera_state)
             .add_systems(
                 Update,
-                (process_camera_events, update_camera_animations, apply_camera_transform)
+                (process_camera_events, update_camera, apply_camera_transform)
                     .chain()
                     .in_set(GameSet::Render),
             )
@@ -24,7 +24,6 @@ impl Plugin for CameraPlugin {
 
 // --- Easing ---
 
-/// Cubic ease-in-out: smooth acceleration and deceleration.
 fn ease_in_out_cubic(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     if t < 0.5 {
@@ -75,34 +74,54 @@ enum CameraEventKind {
     Rotate { angle_rad: f32, duration_beats: f64 },
 }
 
-// --- Camera state resource ---
+// --- Constants ---
 
 const ZOOM_MIN: f32 = 0.5;
 const ZOOM_MAX: f32 = 2.0;
 const ROTATION_LIMIT_RAD: f32 = 30.0 * std::f32::consts::PI / 180.0;
-const LOOK_AHEAD_BEATS: f64 = 2.0;
-const LOOK_AHEAD_SMOOTHING: f32 = 3.0;
+
+/// How far ahead of the playhead the camera looks (in spline progress units).
+const LOOK_AHEAD_OFFSET: f32 = 0.04;
+/// Weight of look-ahead position vs playhead position (0.0 = all playhead, 1.0 = all look-ahead).
+const LOOK_AHEAD_WEIGHT: f32 = 0.35;
+
+/// Exponential smoothing factor for camera position (higher = snappier).
+const POSITION_SMOOTHING: f32 = 6.0;
+/// Exponential smoothing factor for track-following rotation.
+const ROTATION_SMOOTHING: f32 = 3.0;
+/// Max angular speed in radians/sec to prevent jarring snaps.
+const MAX_ANGULAR_SPEED: f32 = 2.5;
+/// Rotation intensity: 0.0 = never rotate, 1.0 = full track-following.
+const ROTATION_INTENSITY: f32 = 0.6;
+
+/// Window (in progress units) over which we sample tangent change for curvature.
+const CURVATURE_SAMPLE_WINDOW: f32 = 0.02;
+/// When curvature exceeds this threshold, smoothing increases.
+const HIGH_CURVATURE_THRESHOLD: f32 = 1.5;
+/// Extra smoothing multiplier during high curvature.
+const CURVATURE_SMOOTHING_BOOST: f32 = 0.3;
+
+// --- Camera state resource ---
 
 #[derive(Resource)]
 struct CameraState {
-    /// Queued chart events, sorted by beat (ascending). Consumed as beat passes.
+    // Chart event queue
     pending_events: Vec<QueuedCameraEvent>,
-    /// Index into pending_events: everything before this has already been triggered.
     next_event_index: usize,
 
-    // Active animations (at most one of each type active; new one replaces old)
+    // Active animations
     zoom_anim: Option<ZoomAnim>,
     pan_anim: Option<PanAnim>,
     rotate_anim: Option<RotateAnim>,
 
-    // Current values from chart events
+    // Current values from chart events (additive overlays)
     event_zoom: f32,
     event_pan: Vec2,
     event_rotation: f32,
 
-    // Look-ahead pan (smoothed)
-    look_ahead_target: Vec2,
-    look_ahead_current: Vec2,
+    // Playhead tracking state
+    camera_position: Vec2,
+    playhead_angle: f32,
 }
 
 impl Default for CameraState {
@@ -116,16 +135,27 @@ impl Default for CameraState {
             event_zoom: 1.0,
             event_pan: Vec2::ZERO,
             event_rotation: 0.0,
-            look_ahead_target: Vec2::ZERO,
-            look_ahead_current: Vec2::ZERO,
+            camera_position: Vec2::ZERO,
+            playhead_angle: 0.0,
         }
     }
 }
 
 // --- Systems ---
 
-fn init_camera_state(mut commands: Commands, selected: Option<Res<SelectedSong>>) {
+fn init_camera_state(
+    mut commands: Commands,
+    selected: Option<Res<SelectedSong>>,
+    spline: Option<Res<SplinePath>>,
+) {
     let mut state = CameraState::default();
+
+    // Initialize camera to spline start
+    if let Some(ref spline) = spline {
+        state.camera_position = spline.position_at_progress(0.0);
+        let tangent = spline.tangent_at_progress(0.0);
+        state.playhead_angle = tangent.y.atan2(tangent.x);
+    }
 
     if let Some(selected) = selected {
         let mut events: Vec<QueuedCameraEvent> = selected
@@ -180,7 +210,6 @@ fn process_camera_events(
 
     let beat = conductor.current_beat;
 
-    // Trigger any pending events whose beat has arrived
     while state.next_event_index < state.pending_events.len() {
         let event = &state.pending_events[state.next_event_index];
         if event.beat > beat {
@@ -227,10 +256,10 @@ fn process_camera_events(
     }
 }
 
-fn update_camera_animations(
+fn update_camera(
     conductor: Option<Res<SongConductor>>,
     time: Res<Time>,
-    queue: Option<Res<NoteQueue>>,
+    playhead: Option<Res<Playhead>>,
     spline: Option<Res<SplinePath>>,
     mut state: Option<ResMut<CameraState>>,
 ) {
@@ -238,6 +267,7 @@ fn update_camera_animations(
     let Some(ref mut state) = state else { return };
 
     let beat = conductor.current_beat;
+    let dt = time.delta_secs();
 
     // --- Update chart-driven animations ---
 
@@ -283,44 +313,73 @@ fn update_camera_animations(
         }
     }
 
-    // --- Auto look-ahead panning ---
+    // --- Playhead tracking ---
 
-    if let (Some(queue), Some(spline)) = (queue, spline) {
-        let look_start = beat;
-        let look_end = beat + LOOK_AHEAD_BEATS;
+    if let (Some(playhead), Some(spline)) = (playhead, spline) {
+        let progress = playhead.progress(beat);
+        let playhead_pos = spline.position_at_progress(progress);
 
-        // Find notes in the look-ahead window and compute their centroid on the path
-        let mut centroid = Vec2::ZERO;
-        let mut count = 0u32;
+        // Look ahead slightly for better note visibility
+        let look_ahead_progress = (progress + LOOK_AHEAD_OFFSET).min(1.0);
+        let look_ahead_pos = spline.position_at_progress(look_ahead_progress);
 
-        for note in queue.notes.iter().skip(queue.next_index.saturating_sub(1)) {
-            if note.target_beat > look_end {
-                break;
-            }
-            if note.target_beat >= look_start {
-                // Approximate where this note is on the path right now
-                let spawn_beat = note.target_beat - queue.travel_beats;
-                let p = ((beat - spawn_beat) / queue.travel_beats).clamp(0.0, 1.0) as f32;
-                let pos = spline.position_at_progress(p);
-                centroid += pos;
-                count += 1;
-            }
-        }
+        // Blend playhead and look-ahead positions
+        let target_pos = playhead_pos.lerp(look_ahead_pos, LOOK_AHEAD_WEIGHT);
 
-        if count > 0 {
-            state.look_ahead_target = centroid / count as f32;
+        // Compute curvature factor to increase smoothing on sharp turns
+        let curvature = compute_curvature(&spline, progress);
+        let curvature_factor = if curvature > HIGH_CURVATURE_THRESHOLD {
+            CURVATURE_SMOOTHING_BOOST
         } else {
-            // No upcoming notes — ease back toward origin
-            state.look_ahead_target = Vec2::ZERO;
-        }
+            1.0
+        };
+        let effective_smoothing = POSITION_SMOOTHING * curvature_factor;
 
-        // Smooth toward target
-        let dt = time.delta_secs();
-        let alpha = (LOOK_AHEAD_SMOOTHING * dt).min(1.0);
-        state.look_ahead_current = state
-            .look_ahead_current
-            .lerp(state.look_ahead_target, alpha);
+        // Smooth-follow camera position
+        let alpha = (effective_smoothing * dt).min(1.0);
+        state.camera_position = state.camera_position.lerp(target_pos, alpha);
+
+        // Track-following rotation
+        let tangent = spline.tangent_at_progress(progress).normalize_or_zero();
+        if tangent.length_squared() > 0.01 {
+            let target_angle = tangent.y.atan2(tangent.x) * ROTATION_INTENSITY;
+
+            // Angular difference with wrapping
+            let mut angle_diff = target_angle - state.playhead_angle;
+            // Wrap to [-PI, PI]
+            angle_diff = (angle_diff + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+
+            // Cap angular speed
+            let max_delta = MAX_ANGULAR_SPEED * dt;
+            let clamped_diff = angle_diff.clamp(-max_delta, max_delta);
+
+            let rot_alpha = (ROTATION_SMOOTHING * dt).min(1.0);
+            state.playhead_angle += clamped_diff * rot_alpha;
+        }
     }
+}
+
+/// Estimate path curvature at a given progress by comparing tangent directions
+/// over a small window.
+fn compute_curvature(spline: &SplinePath, progress: f32) -> f32 {
+    let half = CURVATURE_SAMPLE_WINDOW * 0.5;
+    let p0 = (progress - half).max(0.0);
+    let p1 = (progress + half).min(1.0);
+
+    let t0 = spline.tangent_at_progress(p0).normalize_or_zero();
+    let t1 = spline.tangent_at_progress(p1).normalize_or_zero();
+
+    if t0.length_squared() < 0.01 || t1.length_squared() < 0.01 {
+        return 0.0;
+    }
+
+    // Angle between the two tangent vectors
+    let dot = t0.dot(t1).clamp(-1.0, 1.0);
+    let angle = dot.acos();
+
+    let dp = p1 - p0;
+    if dp > 0.0 { angle / dp } else { 0.0 }
 }
 
 fn apply_camera_transform(
@@ -330,13 +389,14 @@ fn apply_camera_transform(
     let Some(state) = state else { return };
 
     for (mut transform, mut projection) in &mut camera_q {
-        // Combine event pan + look-ahead
-        let final_pan = state.event_pan + state.look_ahead_current;
-        transform.translation.x = final_pan.x;
-        transform.translation.y = final_pan.y;
+        // Combine playhead tracking + event pan overlay
+        let final_pos = state.camera_position + state.event_pan;
+        transform.translation.x = final_pos.x;
+        transform.translation.y = final_pos.y;
 
-        // Rotation
-        transform.rotation = Quat::from_rotation_z(state.event_rotation);
+        // Combine playhead rotation + event rotation overlay
+        let final_rotation = state.playhead_angle + state.event_rotation;
+        transform.rotation = Quat::from_rotation_z(final_rotation);
 
         // Zoom via projection scale
         if let Projection::Orthographic(ref mut ortho) = *projection {
@@ -351,7 +411,6 @@ fn cleanup_camera_state(
 ) {
     commands.remove_resource::<CameraState>();
 
-    // Reset camera to defaults
     for (mut transform, mut projection) in &mut camera_q {
         transform.translation = Vec3::ZERO;
         transform.rotation = Quat::IDENTITY;
@@ -380,7 +439,6 @@ mod tests {
 
     #[test]
     fn ease_in_out_cubic_symmetry() {
-        // f(0.25) + f(0.75) should equal 1.0 for symmetric ease
         let a = ease_in_out_cubic(0.25);
         let b = ease_in_out_cubic(0.75);
         assert!((a + b - 1.0).abs() < 1e-6);

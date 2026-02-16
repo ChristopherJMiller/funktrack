@@ -6,7 +6,7 @@ use crate::GameSet;
 use crate::action::GameAction;
 use crate::conductor::SongConductor;
 use crate::input::{CriticalInput, DualSlideInput, ScratchInput, SlideInput, TapInput};
-use crate::notes::{AdLibMarker, BeatTapCount, DualSlideDirections, HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind, NoteTiming, NoteType};
+use crate::notes::{AdLibMarker, BeatTapCount, DualSlideDirections, HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind, NoteTiming, NoteType, Playhead};
 use crate::path::SplinePath;
 use crate::state::GameScreen;
 use crate::visuals::spawn_feedback_visual;
@@ -132,11 +132,13 @@ fn check_hits(
     mut notes: Query<(Entity, &NoteTiming, &NoteType, Option<&NoteDirection>, Option<&HoldState>, Option<&mut BeatTapCount>, Option<&DualSlideDirections>), With<NoteAlive>>,
     conductor: Option<Res<SongConductor>>,
     spline: Option<Res<SplinePath>>,
+    playhead: Option<Res<Playhead>>,
     mut results: MessageWriter<JudgmentResult>,
 ) {
     let Some(conductor) = conductor else { return };
     let Some(spline) = spline else { return };
-    let pos = spline.position_at_progress(1.0);
+    let Some(playhead) = playhead else { return };
+    let pos = spline.position_at_progress(playhead.progress(conductor.current_beat));
     let mut consumed: Vec<Entity> = Vec::new();
 
     // --- Critical inputs (process first — most specific, consumes before Tap/Slide) ---
@@ -330,11 +332,13 @@ fn check_holds(
     holds: Query<(Entity, &HoldEndBeat, &HoldState), With<NoteAlive>>,
     conductor: Option<Res<SongConductor>>,
     spline: Option<Res<SplinePath>>,
+    playhead: Option<Res<Playhead>>,
     mut results: MessageWriter<JudgmentResult>,
 ) {
     let Some(conductor) = conductor else { return };
     let Some(spline) = spline else { return };
-    let pos = spline.position_at_progress(1.0);
+    let Some(playhead) = playhead else { return };
+    let pos = spline.position_at_progress(playhead.progress(conductor.current_beat));
     let tap_held = action.pressed(&GameAction::Tap);
 
     for (entity, hold_end, hold_state) in &holds {
@@ -388,10 +392,12 @@ fn despawn_missed(
     notes: Query<(Entity, &NoteTiming, &NoteType, Option<&HoldState>, Option<&AdLibMarker>), With<NoteAlive>>,
     conductor: Option<Res<SongConductor>>,
     spline: Option<Res<SplinePath>>,
+    playhead: Option<Res<Playhead>>,
     mut results: MessageWriter<JudgmentResult>,
 ) {
     let Some(conductor) = conductor else { return };
     let Some(spline) = spline else { return };
+    let Some(playhead) = playhead else { return };
     let miss_beats = ms_to_beats(MISS_WINDOW_MS, conductor.bpm);
 
     for (entity, timing, note_type, hold_state, adlib) in &notes {
@@ -407,7 +413,7 @@ fn despawn_missed(
                 continue;
             }
 
-            let pos = spline.position_at_progress(1.0);
+            let pos = spline.position_at_progress(playhead.progress(conductor.current_beat));
             let is_hold = matches!(note_type.0, NoteKind::Hold { .. });
 
             if is_hold {

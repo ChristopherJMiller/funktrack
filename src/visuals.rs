@@ -9,7 +9,7 @@ use crate::conductor::SongConductor;
 use crate::judgment::{Judgment, JudgmentFeedback};
 use crate::notes::{
     DualSlideDirections, HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind,
-    NoteProgress, NoteTiming, NoteType,
+    NoteTiming, NoteType, Playhead, SplineProgress,
 };
 use crate::path::SplinePath;
 use crate::scoring::{ChainTier, ScoreState};
@@ -20,10 +20,16 @@ pub struct VisualsPlugin;
 impl Plugin for VisualsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(ShapePlugin)
-            .add_systems(OnEnter(GameScreen::Playing), spawn_path_visual)
+            .add_systems(
+                Update,
+                spawn_path_visual
+                    .run_if(in_state(GameScreen::Playing))
+                    .before(GameSet::Render),
+            )
             .add_systems(
                 Update,
                 (
+                    update_playhead_visual,
                     update_note_visuals,
                     update_hold_visuals,
                     update_feedback_visuals,
@@ -61,7 +67,7 @@ const DUAL_SLIDE_FILL: Color = Color::srgba(0.4, 0.9, 1.0, 0.1);
 pub struct PathVisual;
 
 #[derive(Component)]
-struct JudgmentPointVisual;
+struct PlayheadVisual;
 
 #[derive(Component)]
 struct NoteVisual;
@@ -99,7 +105,14 @@ struct FeedbackGhost;
 
 // --- Path visual ---
 
-fn spawn_path_visual(mut commands: Commands, spline: Option<Res<SplinePath>>) {
+fn spawn_path_visual(
+    mut commands: Commands,
+    spline: Option<Res<SplinePath>>,
+    existing: Query<(), With<PathVisual>>,
+) {
+    if !existing.is_empty() {
+        return;
+    }
     let Some(spline) = spline else { return };
 
     // Build path from spline samples
@@ -119,20 +132,20 @@ fn spawn_path_visual(mut commands: Commands, spline: Option<Res<SplinePath>>) {
         Transform::from_translation(Vec3::Z * 0.0),
     ));
 
-    // Judgment point — double white circle at end of path
-    let judgment_pos = spline.position_at_progress(1.0);
+    // Playhead visual — double white circle that moves along the track
+    let playhead_pos = spline.position_at_progress(0.0);
 
     let circle_inner = shapes::Circle {
         radius: 20.0,
         center: Vec2::ZERO,
     };
     commands.spawn((
-        JudgmentPointVisual,
+        PlayheadVisual,
         DespawnOnExit(GameScreen::Playing),
         ShapeBuilder::with(&circle_inner)
             .stroke((JUDGMENT_COLOR, 2.0))
             .build(),
-        Transform::from_translation(judgment_pos.extend(0.1)),
+        Transform::from_translation(playhead_pos.extend(0.1)),
     ));
 
     let circle_outer = shapes::Circle {
@@ -140,12 +153,12 @@ fn spawn_path_visual(mut commands: Commands, spline: Option<Res<SplinePath>>) {
         center: Vec2::ZERO,
     };
     commands.spawn((
-        JudgmentPointVisual,
+        PlayheadVisual,
         DespawnOnExit(GameScreen::Playing),
         ShapeBuilder::with(&circle_outer)
             .stroke((JUDGMENT_COLOR, 1.0))
             .build(),
-        Transform::from_translation(judgment_pos.extend(0.1)),
+        Transform::from_translation(playhead_pos.extend(0.1)),
     ));
 }
 
@@ -512,11 +525,29 @@ pub fn spawn_feedback_visual(commands: &mut Commands, entity: Entity, judgment: 
 
 // --- Update systems ---
 
+fn update_playhead_visual(
+    conductor: Option<Res<SongConductor>>,
+    playhead: Option<Res<Playhead>>,
+    spline: Option<Res<SplinePath>>,
+    mut playhead_q: Query<&mut Transform, With<PlayheadVisual>>,
+) {
+    let Some(conductor) = conductor else { return };
+    let Some(playhead) = playhead else { return };
+    let Some(spline) = spline else { return };
+
+    let progress = playhead.progress(conductor.current_beat);
+    let pos = spline.position_at_progress(progress);
+
+    for mut t in &mut playhead_q {
+        t.translation = pos.extend(t.translation.z);
+    }
+}
+
 fn update_note_visuals(
     notes: Query<
         (
             Entity,
-            &NoteProgress,
+            &SplineProgress,
             &NoteType,
             Option<&NoteDirection>,
             Option<&DualSlideDirections>,
@@ -590,7 +621,7 @@ fn update_note_visuals(
 fn update_hold_visuals(
     holds: Query<
         (
-            &NoteProgress,
+            &SplineProgress,
             &NoteTiming,
             Option<&HoldEndBeat>,
             Option<&HoldState>,
@@ -598,17 +629,16 @@ fn update_hold_visuals(
         ),
         With<NoteAlive>,
     >,
-    conductor: Option<Res<SongConductor>>,
+    playhead: Option<Res<Playhead>>,
     spline: Option<Res<SplinePath>>,
-    mut transforms: Query<&mut Transform>,
     ribbons: Query<&HoldRibbon>,
     note_visuals: Query<&NoteVisual>,
     mut shapes: Query<&mut Shape>,
 ) {
     let Some(spline) = spline else { return };
-    let Some(conductor) = conductor else { return };
+    let Some(playhead) = playhead else { return };
 
-    for (progress, timing, hold_end, hold_state, children) in &holds {
+    for (progress, _timing, hold_end, hold_state, children) in &holds {
         let Some(hold_end) = hold_end else {
             continue;
         };
@@ -620,22 +650,19 @@ fn update_hold_visuals(
             _ => HOLD_COLOR,
         };
 
-        let head_p = if state == HoldState::Held {
-            progress.0.min(1.0)
-        } else {
-            progress.0
-        };
-        let head_pos = spline.position_at_progress(head_p.min(1.0));
+        // Head is at the note's fixed spline position
+        let head_p = progress.0;
+        // Tail is at the hold end beat's spline position
+        let tail_p = playhead.progress(hold_end.0);
 
-        let tail_spawn_beat = hold_end.0 - timing.travel_beats;
-        let tail_p = ((conductor.current_beat - tail_spawn_beat) / timing.travel_beats)
-            .clamp(0.0, 1.0) as f32;
+        // Parent entity's world position (used to convert to local coords)
+        let parent_pos = spline.position_at_progress(head_p);
 
         for child in children.iter() {
-            // Update ribbon
+            // Update ribbon — stretches from head to tail along spline
             if ribbons.get(child).is_ok() {
-                let p_start = tail_p.min(head_p.min(1.0));
-                let p_end = tail_p.max(head_p.min(1.0));
+                let p_start = head_p.min(tail_p);
+                let p_end = head_p.max(tail_p);
                 if p_end > p_start {
                     let segments = 16;
                     let step = (p_end - p_start) / segments as f32;
@@ -644,7 +671,7 @@ fn update_hold_visuals(
                     let mut bot_pts = Vec::with_capacity(segments + 1);
                     for i in 0..=segments {
                         let pa = p_start + step * i as f32;
-                        let a = spline.position_at_progress(pa);
+                        let a = spline.position_at_progress(pa) - parent_pos;
                         let tang = spline.tangent_at_progress(pa).normalize_or_zero();
                         let perp = Vec2::new(-tang.y, tang.x) * 4.0;
                         top_pts.push(a + perp);
@@ -677,13 +704,6 @@ fn update_hold_visuals(
                     if let Some(ref mut fill) = shape.fill {
                         fill.color = color.with_alpha(0.15);
                     }
-                }
-                // Position head circles at head position (relative to parent)
-                if let Ok(mut t) = transforms.get_mut(child) {
-                    let parent_pos =
-                        spline.position_at_progress(progress.0.min(1.0));
-                    t.translation =
-                        (head_pos - parent_pos).extend(t.translation.z);
                 }
             }
         }

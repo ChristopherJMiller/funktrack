@@ -7,7 +7,7 @@ use crate::audio::{KiraContext, stop_song};
 use crate::conductor::SongConductor;
 use crate::beatmap::SelectedSong;
 use crate::judgment::JudgmentFeedback;
-use crate::notes::{NoteAlive, NoteQueue};
+use crate::notes::{NoteAlive, NoteQueue, Playhead};
 use crate::path::SplinePath;
 use crate::scoring::{GradeRank, ScoreState};
 use crate::state::GameScreen;
@@ -321,6 +321,7 @@ fn cleanup_gameplay(
 
     commands.remove_resource::<SplinePath>();
     commands.remove_resource::<NoteQueue>();
+    commands.remove_resource::<Playhead>();
     commands.remove_resource::<SongConductor>();
     commands.remove_resource::<ScoreState>();
     commands.remove_resource::<SongComplete>();

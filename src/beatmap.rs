@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::audio::{KiraContext, play_song};
 use crate::conductor::{SongConductor, TimingPoint};
 use crate::config::GameSettings;
-use crate::notes::{ChartNote, NoteKind, NoteQueue};
+use crate::notes::{ChartNote, NoteKind, NoteQueue, Playhead};
 use crate::path::SplinePath;
 use crate::results::SongComplete;
 use crate::state::GameScreen;
@@ -91,6 +91,27 @@ fn default_travel_beats() -> f64 {
 
 fn default_look_ahead() -> f64 {
     3.0
+}
+
+/// Extract the beat range covered by path segments.
+fn beat_range_from_segments(segments: &[PathSegment]) -> (f64, f64) {
+    let mut min_beat = f64::MAX;
+    let mut max_beat = f64::MIN;
+    for seg in segments {
+        let (s, e) = match seg {
+            PathSegment::CatmullRom { start_beat, end_beat, .. }
+            | PathSegment::Bezier { start_beat, end_beat, .. }
+            | PathSegment::Arc { start_beat, end_beat, .. }
+            | PathSegment::Linear { start_beat, end_beat, .. } => (*start_beat, *end_beat),
+        };
+        if s < min_beat { min_beat = s; }
+        if e > max_beat { max_beat = e; }
+    }
+    if min_beat > max_beat {
+        (0.0, 1.0)
+    } else {
+        (min_beat, max_beat)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -382,13 +403,16 @@ fn setup_playing(
     }
     notes.sort_by(|a, b| a.target_beat.partial_cmp(&b.target_beat).unwrap());
 
-    // Note speed multiplier: higher speed = fewer travel beats (notes move faster)
-    let travel_beats = selected.chart.travel_beats / settings.note_speed as f64;
     commands.insert_resource(NoteQueue {
         notes,
         next_index: 0,
-        look_ahead_beats: selected.chart.look_ahead_beats,
-        travel_beats,
+    });
+
+    // Extract beat range from path segments and insert Playhead
+    let (song_start_beat, song_end_beat) = beat_range_from_segments(&selected.chart.path_segments);
+    commands.insert_resource(Playhead {
+        song_start_beat,
+        song_end_beat,
     });
 
     // 3. Build SongConductor

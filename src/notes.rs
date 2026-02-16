@@ -1,17 +1,15 @@
 use bevy::prelude::*;
 
 use crate::GameSet;
-use crate::beatmap::SlideDirection;
 use crate::conductor::SongConductor;
-use crate::config::GameSettings;
+use crate::path::SplinePath;
 use crate::visuals::spawn_note_visual;
 
 pub struct NotesPlugin;
 
 impl Plugin for NotesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, spawn_notes.in_set(GameSet::SpawnNotes))
-            .add_systems(Update, move_notes.in_set(GameSet::MoveNotes));
+        app.add_systems(Update, spawn_notes.in_set(GameSet::SpawnNotes));
     }
 }
 
@@ -20,13 +18,13 @@ impl Plugin for NotesPlugin {
 #[derive(Debug, Clone, Copy)]
 pub enum NoteKind {
     Tap,
-    Slide(SlideDirection),
+    Slide(crate::beatmap::SlideDirection),
     Hold { end_beat: f64 },
     AdLib,
     Beat,
     Scratch,
     Critical,
-    DualSlide(SlideDirection, SlideDirection),
+    DualSlide(crate::beatmap::SlideDirection, crate::beatmap::SlideDirection),
 }
 
 #[derive(Component)]
@@ -44,17 +42,16 @@ pub enum HoldState {
 pub struct NoteType(pub NoteKind);
 
 #[derive(Component)]
-pub struct NoteDirection(pub SlideDirection);
+pub struct NoteDirection(pub crate::beatmap::SlideDirection);
 
 #[derive(Component)]
 pub struct NoteTiming {
     pub target_beat: f64,
-    pub spawn_beat: f64,
-    pub travel_beats: f64,
 }
 
+/// Fixed spline progress for a stationary note (0.0 = start, 1.0 = end of spline).
 #[derive(Component)]
-pub struct NoteProgress(pub f32);
+pub struct SplineProgress(pub f32);
 
 #[derive(Component)]
 pub struct NoteAlive;
@@ -72,7 +69,7 @@ pub struct BeatTapCount {
 
 /// Stores both directions for a Dual Slide note.
 #[derive(Component)]
-pub struct DualSlideDirections(pub SlideDirection, pub SlideDirection);
+pub struct DualSlideDirections(pub crate::beatmap::SlideDirection, pub crate::beatmap::SlideDirection);
 
 // --- Resources ---
 
@@ -85,49 +82,70 @@ pub struct ChartNote {
 pub struct NoteQueue {
     pub notes: Vec<ChartNote>,
     pub next_index: usize,
-    pub look_ahead_beats: f64,
-    pub travel_beats: f64,
+}
+
+/// Maps song beats to spline progress (0.0→1.0).
+/// The playhead rides along the track; camera follows it.
+#[derive(Resource)]
+pub struct Playhead {
+    pub song_start_beat: f64,
+    pub song_end_beat: f64,
+}
+
+impl Playhead {
+    /// Convert a beat to normalized spline progress, clamped 0.0→1.0.
+    pub fn progress(&self, beat: f64) -> f32 {
+        let range = self.song_end_beat - self.song_start_beat;
+        if range <= 0.0 {
+            return 0.0;
+        }
+        ((beat - self.song_start_beat) / range).clamp(0.0, 1.0) as f32
+    }
 }
 
 // --- Systems ---
+
+/// Spawn window: notes become visible when the playhead is within this
+/// fraction of the spline from their position.
+const SPAWN_VISIBILITY_RANGE: f32 = 0.25;
 
 fn spawn_notes(
     mut commands: Commands,
     conductor: Option<Res<SongConductor>>,
     queue: Option<ResMut<NoteQueue>>,
-    settings: Option<Res<GameSettings>>,
+    playhead: Option<Res<Playhead>>,
+    spline: Option<Res<SplinePath>>,
 ) {
     let Some(conductor) = conductor else { return };
     let Some(mut queue) = queue else { return };
+    let Some(playhead) = playhead else { return };
+    let Some(_spline) = spline else { return };
 
     if !conductor.playing {
         return;
     }
 
-    // Visual offset: positive means visuals are late, so spawn notes earlier (larger horizon)
-    let visual_offset_beats = if let Some(ref settings) = settings {
-        settings.visual_offset_ms as f64 * conductor.bpm / 60_000.0
-    } else {
-        0.0
-    };
-    let horizon = conductor.current_beat + queue.look_ahead_beats + visual_offset_beats;
+    let current_progress = playhead.progress(conductor.current_beat);
 
     while queue.next_index < queue.notes.len() {
         let note = &queue.notes[queue.next_index];
-        let spawn_beat = note.target_beat - queue.travel_beats;
-        if spawn_beat > horizon {
+        let note_progress = playhead.progress(note.target_beat);
+
+        // Spawn notes that are within the visibility range ahead of the playhead
+        if note_progress > current_progress + SPAWN_VISIBILITY_RANGE {
             break;
         }
+
         let kind = note.kind;
         let entity = commands.spawn((
             NoteType(kind),
             NoteTiming {
                 target_beat: note.target_beat,
-                spawn_beat,
-                travel_beats: queue.travel_beats,
             },
-            NoteProgress(0.0),
+            SplineProgress(note_progress),
             NoteAlive,
+            Transform::default(),
+            Visibility::default(),
         )).id();
         match kind {
             NoteKind::Slide(dir) => {
@@ -151,16 +169,3 @@ fn spawn_notes(
         queue.next_index += 1;
     }
 }
-
-fn move_notes(
-    conductor: Option<Res<SongConductor>>,
-    mut query: Query<(&NoteTiming, &mut NoteProgress)>,
-) {
-    let Some(conductor) = conductor else { return };
-
-    for (timing, mut progress) in &mut query {
-        let p = (conductor.current_beat - timing.spawn_beat) / timing.travel_beats;
-        progress.0 = p.max(0.0) as f32;
-    }
-}
-
