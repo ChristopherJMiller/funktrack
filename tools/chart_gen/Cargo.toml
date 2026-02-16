@@ -3,3 +3,16 @@ name = "chart_gen"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92.0"
+
+[[bin]]
+name = "chart_gen"
+path = "src/main.rs"
+
+[dependencies]
+symphonia = { version = "0.5", features = ["all"] }
+realfft = "3.5"
+rustfft = "6.4"
+serde = { version = "1", features = ["derive"] }
+ron = "0.8"
+clap = { version = "4", features = ["derive"] }
+noise = "0.9"

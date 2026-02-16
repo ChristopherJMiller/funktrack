@@ -102,20 +102,20 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Offline tool that produces playable charts from any audio file.
 
-- [ ] Separate binary crate (`tools/chart_gen`)
-- [ ] Audio decoding via symphonia
-- [ ] STFT computation via rustfft/realfft (2048 window, 512 hop, Hann)
-- [ ] Spectral flux onset detection with adaptive peak picking
-- [ ] Beat tracking via autocorrelation with ~120 BPM perceptual bias
-- [ ] Beat-grid quantization of onsets
-- [ ] Difficulty scaling via onset strength thresholding (Easy through Expert)
-- [ ] Audio-reactive path generation:
-  - [ ] Catmull-Rom splines with beat-aligned control points
-  - [ ] Sub-band energy mapping (bass → sweeps, highs → oscillations)
-  - [ ] Perlin noise modulation scaled by RMS energy
-  - [ ] Mean-reversion spring to prevent drift
-  - [ ] Curvature cap and screen bounds clamping
-- [ ] Output as `.ron` chart file
+- [x] Separate binary crate (`tools/chart_gen`)
+- [x] Audio decoding via symphonia
+- [x] STFT computation via rustfft/realfft (2048 window, 512 hop, Hann)
+- [x] Spectral flux onset detection with adaptive peak picking
+- [x] Beat tracking via autocorrelation with ~120 BPM perceptual bias
+- [x] Beat-grid quantization of onsets
+- [x] Difficulty scaling via onset strength thresholding (Easy through Expert)
+- [x] Audio-reactive path generation:
+  - [x] Catmull-Rom splines with beat-aligned control points
+  - [x] Sub-band energy mapping (bass → sweeps, highs → oscillations)
+  - [x] Perlin noise modulation scaled by RMS energy
+  - [x] Mean-reversion spring to prevent drift
+  - [x] Curvature cap and screen bounds clamping
+- [x] Output as `.ron` chart file
 
 **Milestone:** Run `chart_gen song.ogg --difficulty normal` and get a playable chart.
 
