@@ -6,12 +6,15 @@ mod hud;
 mod input;
 mod judgment;
 mod notes;
+mod particles;
+mod pause;
 mod path;
 mod results;
 mod scoring;
 mod settings;
 mod song_select;
 mod state;
+mod visuals;
 
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -24,12 +27,15 @@ use hud::HudPlugin;
 use input::InputPlugin;
 use judgment::JudgmentPlugin;
 use notes::NotesPlugin;
+use particles::ParticlePlugin;
+use pause::PausePlugin;
 use path::PathPlugin;
 use results::ResultsPlugin;
 use scoring::ScoringPlugin;
 use settings::SettingsPlugin;
 use song_select::SongSelectPlugin;
 use state::{GameScreen, GameStatePlugin};
+use visuals::VisualsPlugin;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum GameSet {
@@ -80,9 +86,14 @@ fn main() {
             ScoringPlugin,
             HudPlugin,
             ResultsPlugin,
+        ))
+        .add_plugins((
             BeatMapPlugin,
             SongSelectPlugin,
             SettingsPlugin,
+            PausePlugin,
+            ParticlePlugin,
+            VisualsPlugin,
         ))
         .run();
 }

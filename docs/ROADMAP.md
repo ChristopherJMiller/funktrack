@@ -123,15 +123,15 @@ Development is organized into phases. Each phase produces a playable (or at leas
 
 **Goal:** Visual quality suitable for a public release.
 
-- [ ] Migrate path rendering from gizmos to `bevy_prototype_lyon`
-- [ ] Note type-specific sprites and animations
-- [ ] Hit effect particles (via `bevy_tweening` or custom)
-- [ ] FEVER / TRANCE visual escalation (path glow, background effects)
+- [x] Migrate path rendering from gizmos to `bevy_prototype_lyon`
+- [x] Note type-specific lyon shapes and animations (all 10 types)
+- [x] Hit effect particles (CPU particle system with lyon shapes)
+- [x] FEVER / TRANCE visual escalation (path color/width by chain tier)
+- [x] Pause/resume during gameplay (Paused state, audio freeze, overlay UI)
 - [ ] Camera look-ahead and zoom driven by chart events
 - [ ] Song preview on select screen
 - [ ] Calibration screen (tap-test for audio/visual/input offsets)
 - [ ] Settings menu (key bindings, offsets, volume, display)
-- [ ] Pause/resume during gameplay
 
 **Milestone:** The game looks and feels like a finished product.
 

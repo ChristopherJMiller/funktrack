@@ -1,5 +1,3 @@
-use std::f32::consts::TAU;
-
 use bevy::prelude::*;
 
 use leafwing_input_manager::prelude::*;
@@ -11,6 +9,7 @@ use crate::input::{CriticalInput, DualSlideInput, ScratchInput, SlideInput, TapI
 use crate::notes::{AdLibMarker, BeatTapCount, DualSlideDirections, HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind, NoteTiming, NoteType};
 use crate::path::SplinePath;
 use crate::state::GameScreen;
+use crate::visuals::spawn_feedback_visual;
 
 pub struct JudgmentPlugin;
 
@@ -29,7 +28,7 @@ impl Plugin for JudgmentPlugin {
         )
         .add_systems(
             Update,
-            (render_feedback, cleanup_feedback).in_set(GameSet::Render),
+            cleanup_feedback.in_set(GameSet::Render),
         );
     }
 }
@@ -441,107 +440,18 @@ fn spawn_feedback(
     mut results: MessageReader<JudgmentResult>,
 ) {
     for result in results.read() {
-        commands.spawn((
+        let entity = commands.spawn((
             DespawnOnExit(GameScreen::Playing),
+            Transform::from_translation(result.position.extend(2.0)),
+            Visibility::default(),
             JudgmentFeedback {
                 judgment: result.judgment,
                 position: result.position,
                 timer: FEEDBACK_LIFETIME,
                 max_time: FEEDBACK_LIFETIME,
             },
-        ));
-    }
-}
-
-/// Y2K future punk feedback rendering.
-///
-/// Inspired by Jet Set Radio's graffiti energy:
-/// - Outer blast ring expands fast then decelerates (ease-out)
-/// - Inner ring pulses with inverse timing
-/// - Starburst lines radiate outward like spray-paint splatter
-/// - Diamond/rhombus shape flashes at center for "tag" feel
-/// - Everything saturated, bold, no subtlety
-fn render_feedback(query: Query<&JudgmentFeedback>, mut gizmos: Gizmos) {
-    for fb in &query {
-        let t = 1.0 - (fb.timer / fb.max_time); // 0→1 progress
-        let color = fb.judgment.color();
-        let pos = fb.position;
-
-        // Ease-out for punchy initial burst that decelerates
-        let ease_out = 1.0 - (1.0 - t) * (1.0 - t);
-        // Sharp pop at start
-        let pop = if t < 0.15 { t / 0.15 } else { 1.0 };
-        // Alpha fades in last 40% of lifetime
-        let alpha = if t < 0.6 { 1.0 } else { 1.0 - (t - 0.6) / 0.4 };
-
-        // --- Outer blast ring (expands 20→65, thick feel via double ring) ---
-        let outer_r = 20.0 + 45.0 * ease_out;
-        let c_outer = color.with_alpha(alpha * 0.9);
-        gizmos.circle_2d(pos, outer_r, c_outer);
-        gizmos.circle_2d(pos, outer_r - 2.0, c_outer);
-
-        // --- Inner ring (scale-pops then settles) ---
-        let inner_scale = if t < 0.2 {
-            // Overshoot pop: 0→1.3 in first 20%
-            let p = t / 0.2;
-            p * 1.3
-        } else {
-            // Settle back: 1.3→1.0
-            let p = ((t - 0.2) / 0.8).min(1.0);
-            1.3 - 0.3 * p
-        };
-        let inner_r = 14.0 * inner_scale * pop;
-        let c_inner = color.with_alpha(alpha * 0.7);
-        gizmos.circle_2d(pos, inner_r, c_inner);
-
-        // --- Starburst lines (8 rays radiating outward like spray splatter) ---
-        let num_rays = 8;
-        let ray_alpha = alpha * 0.8;
-        let c_ray = color.with_alpha(ray_alpha);
-        for i in 0..num_rays {
-            let angle = (i as f32 / num_rays as f32) * TAU + 0.3; // offset so not axis-aligned
-            let dir = Vec2::new(angle.cos(), angle.sin());
-
-            // Rays extend from inner ring to beyond outer ring
-            let ray_start = 10.0 + 8.0 * ease_out;
-            let ray_end = outer_r + 12.0 * ease_out;
-
-            // Alternate ray lengths for asymmetric graffiti feel
-            let length_mult = if i % 2 == 0 { 1.0 } else { 0.7 };
-
-            gizmos.line_2d(
-                pos + dir * ray_start,
-                pos + dir * (ray_start + (ray_end - ray_start) * length_mult),
-                c_ray,
-            );
-        }
-
-        // --- Center diamond flash (graffiti tag marker) ---
-        if t < 0.3 {
-            let diamond_alpha = 1.0 - t / 0.3;
-            let c_diamond = Color::WHITE.with_alpha(diamond_alpha * 0.9);
-            let diamond_size = 8.0 * pop;
-
-            // Draw diamond as 4 lines
-            let up = pos + Vec2::Y * diamond_size;
-            let down = pos - Vec2::Y * diamond_size;
-            let left = pos - Vec2::X * diamond_size;
-            let right = pos + Vec2::X * diamond_size;
-            gizmos.line_2d(up, right, c_diamond);
-            gizmos.line_2d(right, down, c_diamond);
-            gizmos.line_2d(down, left, c_diamond);
-            gizmos.line_2d(left, up, c_diamond);
-        }
-
-        // --- Secondary ghost ring (trails behind outer, ghostly echo) ---
-        if t > 0.1 {
-            let ghost_t = (t - 0.1).min(1.0);
-            let ghost_ease = 1.0 - (1.0 - ghost_t) * (1.0 - ghost_t);
-            let ghost_r = 15.0 + 55.0 * ghost_ease;
-            let ghost_alpha = alpha * 0.3;
-            let c_ghost = color.with_alpha(ghost_alpha);
-            gizmos.circle_2d(pos, ghost_r, c_ghost);
-        }
+        )).id();
+        spawn_feedback_visual(&mut commands, entity, result.judgment);
     }
 }
 

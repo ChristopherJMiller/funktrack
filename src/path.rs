@@ -1,12 +1,11 @@
 use bevy::prelude::*;
 
-use crate::GameSet;
-
 pub struct PathPlugin;
 
+
 impl Plugin for PathPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Update, render_path.in_set(GameSet::Render));
+    fn build(&self, _app: &mut App) {
+        // Path rendering is handled by VisualsPlugin (lyon-based).
     }
 }
 
@@ -107,17 +106,3 @@ impl SplinePath {
     }
 }
 
-fn render_path(spline: Option<Res<SplinePath>>, mut gizmos: Gizmos) {
-    let Some(spline) = spline else { return };
-
-    let resolution = 100 * spline.curve.segments().len();
-    gizmos.linestrip_2d(
-        spline.curve.iter_positions(resolution),
-        Color::srgb(0.0, 0.9, 0.9),
-    );
-
-    // Judgment point — double white circle at end of path
-    let judgment_pos = spline.position_at_progress(1.0);
-    gizmos.circle_2d(judgment_pos, 20.0, Color::WHITE);
-    gizmos.circle_2d(judgment_pos, 22.0, Color::WHITE);
-}

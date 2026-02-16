@@ -5,6 +5,7 @@ pub enum GameScreen {
     #[default]
     SongSelect,
     Playing,
+    Paused,
     Results,
     Settings,
 }
