@@ -1,6 +1,7 @@
 mod action;
 mod audio;
 mod beatmap;
+mod camera;
 mod conductor;
 mod hud;
 mod input;
@@ -22,6 +23,7 @@ use bevy::window::PresentMode;
 use action::ActionPlugin;
 use audio::KiraPlugin;
 use beatmap::BeatMapPlugin;
+use camera::CameraPlugin;
 use conductor::ConductorPlugin;
 use hud::HudPlugin;
 use input::InputPlugin;
@@ -94,6 +96,7 @@ fn main() {
             PausePlugin,
             ParticlePlugin,
             VisualsPlugin,
+            CameraPlugin,
         ))
         .run();
 }

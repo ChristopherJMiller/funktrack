@@ -128,7 +128,7 @@ Development is organized into phases. Each phase produces a playable (or at leas
 - [x] Hit effect particles (CPU particle system with lyon shapes)
 - [x] FEVER / TRANCE visual escalation (path color/width by chain tier)
 - [x] Pause/resume during gameplay (Paused state, audio freeze, overlay UI)
-- [ ] Camera look-ahead and zoom driven by chart events
+- [x] Camera look-ahead and zoom driven by chart events
 - [ ] Song preview on select screen
 - [ ] Calibration screen (tap-test for audio/visual/input offsets)
 - [ ] Settings menu (key bindings, offsets, volume, display)
