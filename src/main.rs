@@ -1,8 +1,10 @@
 mod action;
 mod audio;
 mod beatmap;
+mod calibration;
 mod camera;
 mod conductor;
+mod config;
 mod hud;
 mod input;
 mod judgment;
@@ -23,8 +25,10 @@ use bevy::window::PresentMode;
 use action::ActionPlugin;
 use audio::KiraPlugin;
 use beatmap::BeatMapPlugin;
+use calibration::CalibrationPlugin;
 use camera::CameraPlugin;
 use conductor::ConductorPlugin;
+use config::ConfigPlugin;
 use hud::HudPlugin;
 use input::InputPlugin;
 use judgment::JudgmentPlugin;
@@ -97,6 +101,8 @@ fn main() {
             ParticlePlugin,
             VisualsPlugin,
             CameraPlugin,
+            ConfigPlugin,
+            CalibrationPlugin,
         ))
         .run();
 }

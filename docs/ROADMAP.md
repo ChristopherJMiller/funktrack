@@ -129,9 +129,9 @@ Development is organized into phases. Each phase produces a playable (or at leas
 - [x] FEVER / TRANCE visual escalation (path color/width by chain tier)
 - [x] Pause/resume during gameplay (Paused state, audio freeze, overlay UI)
 - [x] Camera look-ahead and zoom driven by chart events
-- [ ] Song preview on select screen
-- [ ] Calibration screen (tap-test for audio/visual/input offsets)
-- [ ] Settings menu (key bindings, offsets, volume, display)
+- [x] Song preview on select screen
+- [x] Calibration screen (tap-test for audio/visual/input offsets)
+- [x] Settings menu (key bindings, offsets, volume, display)
 
 **Milestone:** The game looks and feels like a finished product.
 

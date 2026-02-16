@@ -5,6 +5,7 @@ use serde::Deserialize;
 
 use crate::audio::{KiraContext, play_song};
 use crate::conductor::{SongConductor, TimingPoint};
+use crate::config::GameSettings;
 use crate::notes::{ChartNote, NoteKind, NoteQueue};
 use crate::path::SplinePath;
 use crate::results::SongComplete;
@@ -289,6 +290,7 @@ fn setup_playing(
     mut commands: Commands,
     mut ctx: NonSendMut<KiraContext>,
     selected: Res<SelectedSong>,
+    settings: Res<GameSettings>,
 ) {
     // 1. Build SplinePath from CatmullRom segments
     let mut all_points: Vec<Vec2> = Vec::new();
@@ -380,11 +382,13 @@ fn setup_playing(
     }
     notes.sort_by(|a, b| a.target_beat.partial_cmp(&b.target_beat).unwrap());
 
+    // Note speed multiplier: higher speed = fewer travel beats (notes move faster)
+    let travel_beats = selected.chart.travel_beats / settings.note_speed as f64;
     commands.insert_resource(NoteQueue {
         notes,
         next_index: 0,
         look_ahead_beats: selected.chart.look_ahead_beats,
-        travel_beats: selected.chart.travel_beats,
+        travel_beats,
     });
 
     // 3. Build SongConductor
@@ -405,6 +409,7 @@ fn setup_playing(
     let audio_path = selected.song_dir.join(&selected.metadata.audio_file);
     let audio_str = audio_path.to_str().expect("audio path must be valid UTF-8");
     play_song(&mut ctx, audio_str, bpm);
+    crate::audio::set_song_volume(&mut ctx, settings.master_amplitude());
 
     // 5. Insert SongComplete
     commands.insert_resource(SongComplete(false));

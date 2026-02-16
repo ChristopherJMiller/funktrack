@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::GameSet;
 use crate::audio::KiraContext;
+use crate::config::GameSettings;
 
 pub struct ConductorPlugin;
 
@@ -99,6 +100,7 @@ fn update_conductor(
     time: Res<Time<Real>>,
     ctx: NonSend<KiraContext>,
     conductor: Option<ResMut<SongConductor>>,
+    settings: Option<Res<GameSettings>>,
 ) {
     let Some(mut conductor) = conductor else { return };
     let Some(ref clock) = ctx.clock else {
@@ -108,7 +110,13 @@ fn update_conductor(
     conductor.playing = true;
 
     let game_time = time.elapsed_secs_f64();
-    let audio_beats = clock_time_to_beats(clock);
+    // Apply audio offset: positive offset means audio is late, so shift beats forward
+    let offset_beats = if let Some(ref settings) = settings {
+        settings.audio_offset_ms as f64 * conductor.bpm / 60_000.0
+    } else {
+        0.0
+    };
+    let audio_beats = clock_time_to_beats(clock) + offset_beats;
 
     // Push sample into rolling window.
     if conductor.time_samples.len() >= MAX_SAMPLES {

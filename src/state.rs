@@ -8,6 +8,7 @@ pub enum GameScreen {
     Paused,
     Results,
     Settings,
+    Calibration,
 }
 
 pub struct GameStatePlugin;

@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use crate::action::GameAction;
+use crate::audio::{KiraContext, play_preview, stop_preview};
 use crate::beatmap::{Difficulty, DiscoveredSong, SelectedSong, discover_songs, load_chart};
+use crate::config::GameSettings;
 use crate::state::GameScreen;
 
 pub struct SongSelectPlugin;
@@ -15,7 +17,8 @@ impl Plugin for SongSelectPlugin {
                 (navigate_songs, update_song_select_ui)
                     .chain()
                     .run_if(in_state(GameScreen::SongSelect)),
-            );
+            )
+            .add_systems(OnExit(GameScreen::SongSelect), cleanup_song_select);
     }
 }
 
@@ -48,6 +51,7 @@ struct SongSelectState {
     songs: Vec<DiscoveredSong>,
     selected_index: usize,
     selected_difficulty_index: usize,
+    preview_playing_index: Option<usize>,
 }
 
 impl SongSelectState {
@@ -83,15 +87,21 @@ struct DifficultyDisplay;
 
 // --- Systems ---
 
-fn setup_song_select(mut commands: Commands) {
+fn setup_song_select(mut commands: Commands, mut ctx: NonSendMut<KiraContext>, settings: Res<GameSettings>) {
     let songs = discover_songs(std::path::Path::new("assets/songs"));
 
-    let initial_diff_idx = 0;
-    let state = SongSelectState {
+    let mut state = SongSelectState {
         songs,
         selected_index: 0,
-        selected_difficulty_index: initial_diff_idx,
+        selected_difficulty_index: 0,
+        preview_playing_index: None,
     };
+
+    // Start preview for first song
+    if !state.songs.is_empty() {
+        start_preview_for_song(&state, &mut ctx, &settings);
+        state.preview_playing_index = Some(0);
+    }
 
     // Root — full screen, dark background
     commands
@@ -307,18 +317,38 @@ fn spawn_hint(parent: &mut ChildSpawnerCommands, key: &str, action: &str) {
         });
 }
 
+fn start_preview_for_song(state: &SongSelectState, ctx: &mut KiraContext, settings: &GameSettings) {
+    if state.songs.is_empty() {
+        return;
+    }
+    let song = &state.songs[state.selected_index];
+    let audio_path = song.dir.join(&song.metadata.audio_file);
+    let Some(audio_str) = audio_path.to_str() else {
+        return;
+    };
+    play_preview(
+        ctx,
+        audio_str,
+        song.metadata.preview_start_ms,
+        song.metadata.preview_duration_ms,
+        settings.preview_amplitude(),
+    );
+}
+
 fn navigate_songs(
     action: Res<ActionState<GameAction>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<SongSelectState>,
     mut commands: Commands,
     mut next_state: ResMut<NextState<GameScreen>>,
+    mut ctx: NonSendMut<KiraContext>,
+    settings: Res<GameSettings>,
 ) {
     if state.songs.is_empty() {
         return;
     }
 
-    let mut changed = false;
+    let mut song_changed = false;
 
     if action.just_pressed(&GameAction::Up) {
         if state.selected_index > 0 {
@@ -326,22 +356,20 @@ fn navigate_songs(
         } else {
             state.selected_index = state.songs.len() - 1;
         }
-        // Reset difficulty index to first available
         state.selected_difficulty_index = 0;
-        changed = true;
+        song_changed = true;
     }
 
     if action.just_pressed(&GameAction::Down) {
         state.selected_index = (state.selected_index + 1) % state.songs.len();
         state.selected_difficulty_index = 0;
-        changed = true;
+        song_changed = true;
     }
 
     if action.just_pressed(&GameAction::Left) {
         let diffs = state.available_difficulties();
         if !diffs.is_empty() && state.selected_difficulty_index > 0 {
             state.selected_difficulty_index -= 1;
-            changed = true;
         }
     }
 
@@ -349,7 +377,15 @@ fn navigate_songs(
         let diffs = state.available_difficulties();
         if !diffs.is_empty() && state.selected_difficulty_index < diffs.len() - 1 {
             state.selected_difficulty_index += 1;
-            changed = true;
+        }
+    }
+
+    // Switch preview when song changes
+    if song_changed {
+        let idx = state.selected_index;
+        if state.preview_playing_index != Some(idx) {
+            start_preview_for_song(&state, &mut ctx, &settings);
+            state.preview_playing_index = Some(idx);
         }
     }
 
@@ -385,8 +421,10 @@ fn navigate_songs(
     if keys.just_pressed(KeyCode::Tab) {
         next_state.set(GameScreen::Settings);
     }
+}
 
-    let _ = changed; // UI update handled by update_song_select_ui
+fn cleanup_song_select(mut ctx: NonSendMut<KiraContext>) {
+    stop_preview(&mut ctx);
 }
 
 fn update_song_select_ui(

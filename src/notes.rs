@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::GameSet;
 use crate::beatmap::SlideDirection;
 use crate::conductor::SongConductor;
+use crate::config::GameSettings;
 use crate::visuals::spawn_note_visual;
 
 pub struct NotesPlugin;
@@ -94,6 +95,7 @@ fn spawn_notes(
     mut commands: Commands,
     conductor: Option<Res<SongConductor>>,
     queue: Option<ResMut<NoteQueue>>,
+    settings: Option<Res<GameSettings>>,
 ) {
     let Some(conductor) = conductor else { return };
     let Some(mut queue) = queue else { return };
@@ -102,7 +104,13 @@ fn spawn_notes(
         return;
     }
 
-    let horizon = conductor.current_beat + queue.look_ahead_beats;
+    // Visual offset: positive means visuals are late, so spawn notes earlier (larger horizon)
+    let visual_offset_beats = if let Some(ref settings) = settings {
+        settings.visual_offset_ms as f64 * conductor.bpm / 60_000.0
+    } else {
+        0.0
+    };
+    let horizon = conductor.current_beat + queue.look_ahead_beats + visual_offset_beats;
 
     while queue.next_index < queue.notes.len() {
         let note = &queue.notes[queue.next_index];
