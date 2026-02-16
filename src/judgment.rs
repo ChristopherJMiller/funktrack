@@ -7,8 +7,8 @@ use leafwing_input_manager::prelude::*;
 use crate::GameSet;
 use crate::action::GameAction;
 use crate::conductor::SongConductor;
-use crate::input::{SlideInput, TapInput};
-use crate::notes::{HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind, NoteTiming, NoteType};
+use crate::input::{CriticalInput, DualSlideInput, ScratchInput, SlideInput, TapInput};
+use crate::notes::{AdLibMarker, BeatTapCount, DualSlideDirections, HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind, NoteTiming, NoteType};
 use crate::path::SplinePath;
 use crate::state::GameScreen;
 
@@ -101,11 +101,11 @@ pub struct JudgmentFeedback {
 
 // --- Helpers ---
 
-fn beats_to_ms(beat_diff: f64, bpm: f64) -> f64 {
+pub(crate) fn beats_to_ms(beat_diff: f64, bpm: f64) -> f64 {
     beat_diff * 60_000.0 / bpm
 }
 
-fn ms_to_beats(ms: f64, bpm: f64) -> f64 {
+pub(crate) fn ms_to_beats(ms: f64, bpm: f64) -> f64 {
     ms * bpm / 60_000.0
 }
 
@@ -127,30 +127,121 @@ fn check_hits(
     mut commands: Commands,
     mut tap_reader: MessageReader<TapInput>,
     mut slide_reader: MessageReader<SlideInput>,
-    notes: Query<(Entity, &NoteTiming, &NoteType, Option<&NoteDirection>, Option<&HoldState>), With<NoteAlive>>,
+    mut scratch_reader: MessageReader<ScratchInput>,
+    mut critical_reader: MessageReader<CriticalInput>,
+    mut dual_slide_reader: MessageReader<DualSlideInput>,
+    mut notes: Query<(Entity, &NoteTiming, &NoteType, Option<&NoteDirection>, Option<&HoldState>, Option<&mut BeatTapCount>, Option<&DualSlideDirections>), With<NoteAlive>>,
     conductor: Option<Res<SongConductor>>,
     spline: Option<Res<SplinePath>>,
     mut results: MessageWriter<JudgmentResult>,
 ) {
     let Some(conductor) = conductor else { return };
     let Some(spline) = spline else { return };
+    let pos = spline.position_at_progress(1.0);
     let mut consumed: Vec<Entity> = Vec::new();
 
-    // --- Tap inputs hit Tap notes and pending Hold note heads ---
+    // --- Critical inputs (process first — most specific, consumes before Tap/Slide) ---
+    for critical in critical_reader.read() {
+        let mut best: Option<(Entity, f64)> = None;
+
+        for (entity, timing, note_type, _, _, _, _) in &notes {
+            if !matches!(note_type.0, NoteKind::Critical) { continue; }
+            if consumed.contains(&entity) { continue; }
+
+            let diff_beats = (critical.beat - timing.target_beat).abs();
+            let diff_ms = beats_to_ms(diff_beats, conductor.bpm);
+
+            if diff_ms <= GOOD_WINDOW_MS {
+                if best.is_none() || diff_ms < best.unwrap().1 {
+                    best = Some((entity, diff_ms));
+                }
+            }
+        }
+
+        if let Some((entity, diff_ms)) = best {
+            consumed.push(entity);
+            let grade = grade_timing(diff_ms).unwrap();
+            info!("{} (Critical) — {:.1}ms", grade.label(), diff_ms);
+            commands.entity(entity).despawn();
+            results.write(JudgmentResult { judgment: grade, position: pos });
+        }
+    }
+
+    // --- Dual Slide inputs (process before regular Slide to avoid ambiguity) ---
+    for dual in dual_slide_reader.read() {
+        let mut best: Option<(Entity, f64)> = None;
+
+        for (entity, timing, note_type, _, _, _, dual_dirs) in &notes {
+            if !matches!(note_type.0, NoteKind::DualSlide(_, _)) { continue; }
+            if consumed.contains(&entity) { continue; }
+            let Some(dd) = dual_dirs else { continue; };
+
+            // Check both orderings
+            let matches = (dual.dir_a == dd.0 && dual.dir_b == dd.1)
+                || (dual.dir_a == dd.1 && dual.dir_b == dd.0);
+            if !matches { continue; }
+
+            let diff_beats = (dual.beat - timing.target_beat).abs();
+            let diff_ms = beats_to_ms(diff_beats, conductor.bpm);
+
+            if diff_ms <= GOOD_WINDOW_MS {
+                if best.is_none() || diff_ms < best.unwrap().1 {
+                    best = Some((entity, diff_ms));
+                }
+            }
+        }
+
+        if let Some((entity, diff_ms)) = best {
+            consumed.push(entity);
+            let grade = grade_timing(diff_ms).unwrap();
+            info!("{} (DualSlide) — {:.1}ms", grade.label(), diff_ms);
+            commands.entity(entity).despawn();
+            results.write(JudgmentResult { judgment: grade, position: pos });
+        }
+    }
+
+    // --- Scratch inputs ---
+    for scratch in scratch_reader.read() {
+        let mut best: Option<(Entity, f64)> = None;
+
+        for (entity, timing, note_type, _, _, _, _) in &notes {
+            if !matches!(note_type.0, NoteKind::Scratch) { continue; }
+            if consumed.contains(&entity) { continue; }
+
+            let diff_beats = (scratch.beat - timing.target_beat).abs();
+            let diff_ms = beats_to_ms(diff_beats, conductor.bpm);
+
+            if diff_ms <= GOOD_WINDOW_MS {
+                if best.is_none() || diff_ms < best.unwrap().1 {
+                    best = Some((entity, diff_ms));
+                }
+            }
+        }
+
+        if let Some((entity, diff_ms)) = best {
+            consumed.push(entity);
+            let grade = grade_timing(diff_ms).unwrap();
+            info!("{} (Scratch) — {:.1}ms", grade.label(), diff_ms);
+            commands.entity(entity).despawn();
+            results.write(JudgmentResult { judgment: grade, position: pos });
+        }
+    }
+
+    // --- Tap inputs hit Tap, AdLib, pending Hold heads, and Beat notes ---
     for tap in tap_reader.read() {
+        // First pass: find best Tap / Hold / AdLib match
         let mut best: Option<(Entity, f64, bool)> = None; // (entity, diff_ms, is_hold)
 
-        for (entity, timing, note_type, _, hold_state) in &notes {
+        for (entity, timing, note_type, _, hold_state, _, _) in &notes {
             let is_tap = matches!(note_type.0, NoteKind::Tap);
+            let is_adlib = matches!(note_type.0, NoteKind::AdLib);
             let is_pending_hold = matches!(note_type.0, NoteKind::Hold { .. })
                 && hold_state.map_or(false, |s| *s == HoldState::Pending);
 
-            if !is_tap && !is_pending_hold {
+            if !is_tap && !is_pending_hold && !is_adlib {
                 continue;
             }
-            if consumed.contains(&entity) {
-                continue;
-            }
+            if consumed.contains(&entity) { continue; }
 
             let diff_beats = (tap.beat - timing.target_beat).abs();
             let diff_ms = beats_to_ms(diff_beats, conductor.bpm);
@@ -164,33 +255,42 @@ fn check_hits(
 
         if let Some((entity, diff_ms, is_hold)) = best {
             consumed.push(entity);
-
             let grade = grade_timing(diff_ms).unwrap();
-            let pos = spline.position_at_progress(1.0);
 
             if is_hold {
-                info!(
-                    "{} (Hold head) — {:.1}ms (beat diff {:.3})",
-                    grade.label(),
-                    diff_ms,
-                    diff_ms * conductor.bpm / 60_000.0
-                );
-                // Don't despawn — transition to Held state
+                info!("{} (Hold head) — {:.1}ms", grade.label(), diff_ms);
                 commands.entity(entity).insert(HoldState::Held);
             } else {
-                info!(
-                    "{} — {:.1}ms (beat diff {:.3})",
-                    grade.label(),
-                    diff_ms,
-                    diff_ms * conductor.bpm / 60_000.0
-                );
+                info!("{} — {:.1}ms", grade.label(), diff_ms);
                 commands.entity(entity).despawn();
             }
 
-            results.write(JudgmentResult {
-                judgment: grade,
-                position: pos,
-            });
+            results.write(JudgmentResult { judgment: grade, position: pos });
+        }
+
+        // Second pass: also increment Beat notes in window (Beat notes aren't consumed on first tap)
+        for (entity, timing, note_type, _, _, mut beat_count, _) in &mut notes {
+            if !matches!(note_type.0, NoteKind::Beat) { continue; }
+            if consumed.contains(&entity) { continue; }
+
+            let diff_beats = (tap.beat - timing.target_beat).abs();
+            let diff_ms = beats_to_ms(diff_beats, conductor.bpm);
+
+            if diff_ms <= GOOD_WINDOW_MS {
+                if let Some(ref mut bc) = beat_count {
+                    if bc.count == 0 {
+                        bc.first_tap_ms = diff_ms;
+                    }
+                    bc.count += 1;
+                    if bc.count >= 2 {
+                        consumed.push(entity);
+                        let grade = grade_timing(bc.first_tap_ms).unwrap();
+                        info!("{} (Beat) — {:.1}ms", grade.label(), bc.first_tap_ms);
+                        commands.entity(entity).despawn();
+                        results.write(JudgmentResult { judgment: grade, position: pos });
+                    }
+                }
+            }
         }
     }
 
@@ -198,18 +298,11 @@ fn check_hits(
     for slide in slide_reader.read() {
         let mut best: Option<(Entity, f64)> = None;
 
-        for (entity, timing, note_type, note_dir, _) in &notes {
-            if !matches!(note_type.0, NoteKind::Slide(_)) {
-                continue;
-            }
-            if consumed.contains(&entity) {
-                continue;
-            }
-            // Skip wrong direction
+        for (entity, timing, note_type, note_dir, _, _, _) in &notes {
+            if !matches!(note_type.0, NoteKind::Slide(_)) { continue; }
+            if consumed.contains(&entity) { continue; }
             if let Some(nd) = note_dir {
-                if nd.0 != slide.direction {
-                    continue;
-                }
+                if nd.0 != slide.direction { continue; }
             }
 
             let diff_beats = (slide.beat - timing.target_beat).abs();
@@ -224,23 +317,10 @@ fn check_hits(
 
         if let Some((entity, diff_ms)) = best {
             consumed.push(entity);
-
             let grade = grade_timing(diff_ms).unwrap();
-            let pos = spline.position_at_progress(1.0);
-
-            info!(
-                "{} (Slide {:?}) — {:.1}ms (beat diff {:.3})",
-                grade.label(),
-                slide.direction,
-                diff_ms,
-                diff_ms * conductor.bpm / 60_000.0
-            );
-
+            info!("{} (Slide {:?}) — {:.1}ms", grade.label(), slide.direction, diff_ms);
             commands.entity(entity).despawn();
-            results.write(JudgmentResult {
-                judgment: grade,
-                position: pos,
-            });
+            results.write(JudgmentResult { judgment: grade, position: pos });
         }
     }
 }
@@ -306,7 +386,7 @@ fn check_holds(
 
 fn despawn_missed(
     mut commands: Commands,
-    notes: Query<(Entity, &NoteTiming, &NoteType, Option<&HoldState>), With<NoteAlive>>,
+    notes: Query<(Entity, &NoteTiming, &NoteType, Option<&HoldState>, Option<&AdLibMarker>), With<NoteAlive>>,
     conductor: Option<Res<SongConductor>>,
     spline: Option<Res<SplinePath>>,
     mut results: MessageWriter<JudgmentResult>,
@@ -315,10 +395,16 @@ fn despawn_missed(
     let Some(spline) = spline else { return };
     let miss_beats = ms_to_beats(MISS_WINDOW_MS, conductor.bpm);
 
-    for (entity, timing, note_type, hold_state) in &notes {
+    for (entity, timing, note_type, hold_state, adlib) in &notes {
         if conductor.current_beat > timing.target_beat + miss_beats {
             // Skip notes that are currently being held (check_holds handles those)
             if hold_state.map_or(false, |s| *s == HoldState::Held) {
+                continue;
+            }
+
+            // Ad-Lib notes silently despawn — no miss penalty
+            if adlib.is_some() {
+                commands.entity(entity).despawn();
                 continue;
             }
 

@@ -343,6 +343,36 @@ fn setup_playing(
                     });
                 }
             }
+            ChartNoteType::AdLib => {
+                notes.push(ChartNote {
+                    target_beat: entry.beat,
+                    kind: NoteKind::AdLib,
+                });
+            }
+            ChartNoteType::Beat => {
+                notes.push(ChartNote {
+                    target_beat: entry.beat,
+                    kind: NoteKind::Beat,
+                });
+            }
+            ChartNoteType::Scratch => {
+                notes.push(ChartNote {
+                    target_beat: entry.beat,
+                    kind: NoteKind::Scratch,
+                });
+            }
+            ChartNoteType::Critical => {
+                notes.push(ChartNote {
+                    target_beat: entry.beat,
+                    kind: NoteKind::Critical,
+                });
+            }
+            ChartNoteType::DualSlide { left, right } => {
+                notes.push(ChartNote {
+                    target_beat: entry.beat,
+                    kind: NoteKind::DualSlide(left, right),
+                });
+            }
             ref other => {
                 warn!("Unsupported note type {:?}, skipping", std::mem::discriminant(other));
             }

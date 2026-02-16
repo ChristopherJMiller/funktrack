@@ -89,12 +89,12 @@ Development is organized into phases. Each phase produces a playable (or at leas
 - [x] Analog stick direction detection (8-way quantization with dead zone)
 - [x] Implement Slide notes (directional input check)
 - [x] Implement Hold notes (sustained input tracking with partial scoring)
-- [ ] Implement Scratch notes (zero-crossing gesture detection)
-- [ ] Implement Beat notes (alternating tap detection)
-- [ ] Implement Critical notes (simultaneous dual-press with ±30ms window)
-- [ ] Implement Dual Slide notes
-- [ ] Implement Ad-Lib notes (invisible, no miss penalty)
-- [ ] Per-player input remapping UI
+- [x] Implement Scratch notes (zero-crossing gesture detection)
+- [x] Implement Beat notes (alternating tap detection)
+- [x] Implement Critical notes (simultaneous dual-press with ±30ms window)
+- [x] Implement Dual Slide notes
+- [x] Implement Ad-Lib notes (invisible, no miss penalty)
+- [x] Per-player input remapping UI
 
 **Milestone:** All 10 note types functional on both keyboard and gamepad.
 

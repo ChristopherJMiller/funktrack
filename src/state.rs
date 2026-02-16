@@ -6,6 +6,7 @@ pub enum GameScreen {
     SongSelect,
     Playing,
     Results,
+    Settings,
 }
 
 pub struct GameStatePlugin;

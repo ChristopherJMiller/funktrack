@@ -9,6 +9,7 @@ mod notes;
 mod path;
 mod results;
 mod scoring;
+mod settings;
 mod song_select;
 mod state;
 
@@ -26,6 +27,7 @@ use notes::NotesPlugin;
 use path::PathPlugin;
 use results::ResultsPlugin;
 use scoring::ScoringPlugin;
+use settings::SettingsPlugin;
 use song_select::SongSelectPlugin;
 use state::{GameScreen, GameStatePlugin};
 
@@ -80,6 +82,7 @@ fn main() {
             ResultsPlugin,
             BeatMapPlugin,
             SongSelectPlugin,
+            SettingsPlugin,
         ))
         .run();
 }

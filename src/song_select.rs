@@ -220,6 +220,7 @@ fn setup_song_select(mut commands: Commands) {
                 spawn_hint(hints, "UP/DOWN", "select");
                 spawn_hint(hints, "LEFT/RIGHT", "difficulty");
                 spawn_hint(hints, "A/SPACE", "play");
+                spawn_hint(hints, "TAB", "settings");
             });
         });
 
@@ -308,6 +309,7 @@ fn spawn_hint(parent: &mut ChildSpawnerCommands, key: &str, action: &str) {
 
 fn navigate_songs(
     action: Res<ActionState<GameAction>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<SongSelectState>,
     mut commands: Commands,
     mut next_state: ResMut<NextState<GameScreen>>,
@@ -377,6 +379,11 @@ fn navigate_songs(
                 error!("Failed to load chart: {}", err);
             }
         }
+    }
+
+    // Tab → Settings screen
+    if keys.just_pressed(KeyCode::Tab) {
+        next_state.set(GameScreen::Settings);
     }
 
     let _ = changed; // UI update handled by update_song_select_ui
