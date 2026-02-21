@@ -254,18 +254,8 @@ fn brush_panel(ui: &mut egui::Ui, state: &mut EditorState) {
                 direction: crate::beatmap::SlideDirection::E,
             },
         ),
-        ("4", "SCRATCH", NoteBrush::Scratch),
-        ("5", "BEAT", NoteBrush::Beat),
-        ("6", "CRITICAL", NoteBrush::Critical),
-        (
-            "7",
-            "DUAL SLIDE",
-            NoteBrush::DualSlide {
-                left: crate::beatmap::SlideDirection::W,
-                right: crate::beatmap::SlideDirection::E,
-            },
-        ),
-        ("8", "AD-LIB", NoteBrush::AdLib),
+        ("4", "CRITICAL", NoteBrush::Critical),
+        ("5", "REST", NoteBrush::Rest),
     ];
 
     for &(key, label, ref brush) in brushes {
@@ -541,7 +531,7 @@ fn timeline_view(ui: &mut egui::Ui, state: &mut EditorState) {
 
     // Note lanes — notes are drawn as colored rectangles on horizontal "rows"
     // Each note type gets a row for easy visual grouping
-    let lane_height = (rect.height() / 10.0).min(40.0).max(16.0);
+    let lane_height = (rect.height() / 7.0).min(40.0).max(16.0);
     let lane_start_y = rect.top() + 24.0; // Below beat numbers
 
     for (i, note) in state.chart.notes.iter().enumerate() {
@@ -584,7 +574,7 @@ fn timeline_view(ui: &mut egui::Ui, state: &mut EditorState) {
 
     // Lane labels on the left edge
     let lane_labels = [
-        "TAP", "HOLD", "SLIDE", "SCRATCH", "BEAT", "CRIT", "DUAL", "ADLIB",
+        "TAP", "HOLD", "SLIDE", "CRIT", "REST",
     ];
     for (lane, label) in lane_labels.iter().enumerate() {
         let y = lane_start_y + lane as f32 * lane_height + lane_height * 0.5;
@@ -730,14 +720,15 @@ fn note_visual_info(note_type: &ChartNoteType) -> (egui::Color32, usize) {
         ChartNoteType::Slide { .. } | ChartNoteType::SlideHold { .. } => {
             (egui::Color32::from_rgb(0, 230, 255), 2)
         }
-        ChartNoteType::Scratch => (egui::Color32::from_rgb(255, 128, 26), 3),
-        ChartNoteType::Beat => (egui::Color32::from_rgb(204, 77, 255), 4),
         ChartNoteType::Critical | ChartNoteType::CriticalHold { .. } => {
-            (egui::Color32::from_rgb(255, 242, 204), 5)
+            (egui::Color32::from_rgb(255, 242, 204), 3)
         }
-        ChartNoteType::DualSlide { .. } => (egui::Color32::from_rgb(102, 230, 255), 6),
-        ChartNoteType::AdLib => {
-            (egui::Color32::from_rgba_premultiplied(230, 230, 255, 120), 7)
+        ChartNoteType::Rest => {
+            (egui::Color32::from_rgba_premultiplied(230, 230, 255, 120), 4)
+        }
+        // Deprecated types show as grey on the last lane
+        ChartNoteType::Scratch | ChartNoteType::Beat | ChartNoteType::DualSlide { .. } => {
+            (egui::Color32::from_rgb(100, 100, 100), 4)
         }
     }
 }

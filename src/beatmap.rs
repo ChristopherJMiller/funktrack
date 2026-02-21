@@ -171,7 +171,7 @@ pub enum ChartNoteType {
     Critical,
     CriticalHold { duration_beats: f64 },
     DualSlide { left: SlideDirection, right: SlideDirection },
-    AdLib,
+    Rest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -366,34 +366,19 @@ fn setup_playing(
                     });
                 }
             }
-            ChartNoteType::AdLib => {
+            ChartNoteType::Rest => {
                 notes.push(ChartNote {
                     target_beat: entry.beat,
-                    kind: NoteKind::AdLib,
+                    kind: NoteKind::Rest,
                 });
             }
-            ChartNoteType::Beat => {
-                notes.push(ChartNote {
-                    target_beat: entry.beat,
-                    kind: NoteKind::Beat,
-                });
-            }
-            ChartNoteType::Scratch => {
-                notes.push(ChartNote {
-                    target_beat: entry.beat,
-                    kind: NoteKind::Scratch,
-                });
+            ChartNoteType::Beat | ChartNoteType::Scratch | ChartNoteType::DualSlide { .. } => {
+                warn!("Deprecated note type {:?} at beat {:.1}, skipping", entry.note_type, entry.beat);
             }
             ChartNoteType::Critical => {
                 notes.push(ChartNote {
                     target_beat: entry.beat,
                     kind: NoteKind::Critical,
-                });
-            }
-            ChartNoteType::DualSlide { left, right } => {
-                notes.push(ChartNote {
-                    target_beat: entry.beat,
-                    kind: NoteKind::DualSlide(left, right),
                 });
             }
             ref other => {

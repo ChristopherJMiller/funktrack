@@ -134,7 +134,7 @@ pub enum ChartNoteType {
     Critical,
     CriticalHold { duration_beats: f64 },
     DualSlide { left: SlideDirection, right: SlideDirection },
-    AdLib,
+    Rest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -233,7 +233,7 @@ mod tests {
                 ChartNoteEntry { beat: 14.0, note_type: ChartNoteType::Scratch },
                 ChartNoteEntry { beat: 16.0, note_type: ChartNoteType::Critical },
                 ChartNoteEntry { beat: 18.0, note_type: ChartNoteType::DualSlide { left: SlideDirection::N, right: SlideDirection::E } },
-                ChartNoteEntry { beat: 20.0, note_type: ChartNoteType::AdLib },
+                ChartNoteEntry { beat: 20.0, note_type: ChartNoteType::Rest },
             ],
             events: Vec::new(),
             travel_beats: 3.0,

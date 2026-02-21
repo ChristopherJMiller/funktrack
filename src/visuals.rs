@@ -8,7 +8,7 @@ use crate::beatmap::SlideDirection;
 use crate::conductor::SongConductor;
 use crate::judgment::{Judgment, JudgmentFeedback};
 use crate::notes::{
-    DualSlideDirections, HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind,
+    HoldEndBeat, HoldState, NoteAlive, NoteDirection, NoteKind,
     NoteTiming, NoteType, Playhead, SplineProgress,
 };
 use crate::path::SplinePath;
@@ -20,6 +20,7 @@ pub struct VisualsPlugin;
 impl Plugin for VisualsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(ShapePlugin)
+            .init_resource::<SmoothedPlayhead>()
             .add_systems(
                 Update,
                 spawn_path_visual
@@ -47,21 +48,24 @@ const PATH_WIDTH: f32 = 3.0;
 const JUDGMENT_COLOR: Color = Color::WHITE;
 
 const TAP_COLOR: Color = Color::srgb(1.0, 0.4, 0.7);
-const TAP_FILL: Color = Color::srgba(1.0, 0.4, 0.7, 0.15);
+const TAP_FILL: Color = Color::srgba(1.0, 0.4, 0.7, 0.25);
 const TANGENT_COLOR: Color = Color::srgb(1.0, 0.8, 0.3);
 const SLIDE_COLOR: Color = Color::srgb(0.0, 0.9, 1.0);
 const SLIDE_FILL: Color = Color::srgba(0.0, 0.9, 1.0, 0.1);
 const HOLD_COLOR: Color = Color::srgb(1.0, 0.85, 0.15);
 const HOLD_HELD_COLOR: Color = Color::srgb(1.0, 0.95, 0.5);
 const HOLD_DROPPED_COLOR: Color = Color::srgb(0.5, 0.4, 0.1);
-const BEAT_COLOR: Color = Color::srgb(0.8, 0.3, 1.0);
-const SCRATCH_COLOR: Color = Color::srgb(1.0, 0.5, 0.1);
 const CRITICAL_COLOR: Color = Color::srgb(1.0, 0.95, 0.8);
 const CRITICAL_FILL: Color = Color::srgba(1.0, 0.95, 0.8, 0.2);
-const DUAL_SLIDE_COLOR: Color = Color::srgb(0.4, 0.9, 1.0);
-const DUAL_SLIDE_FILL: Color = Color::srgba(0.4, 0.9, 1.0, 0.1);
+
+/// Smoothing factor for the playhead visual (higher = snappier, must match camera feel).
+const PLAYHEAD_SMOOTHING: f32 = 8.0;
 
 // --- Marker components ---
+
+/// Tracks smoothed playhead position to avoid micro-stutter from discrete audio clock updates.
+#[derive(Resource, Default)]
+struct SmoothedPlayhead(Vec2);
 
 #[derive(Component)]
 pub struct PathVisual;
@@ -79,10 +83,7 @@ struct TangentLine;
 struct ArrowVisual;
 
 #[derive(Component)]
-struct ScratchLine(u8);
-
-#[derive(Component)]
-struct BeatOuterRing;
+struct CriticalHalo;
 
 #[derive(Component)]
 struct HoldRibbon;
@@ -109,11 +110,15 @@ fn spawn_path_visual(
     mut commands: Commands,
     spline: Option<Res<SplinePath>>,
     existing: Query<(), With<PathVisual>>,
+    mut smoothed: ResMut<SmoothedPlayhead>,
 ) {
     if !existing.is_empty() {
         return;
     }
     let Some(spline) = spline else { return };
+
+    // Reset smoothed playhead to spline start for this song
+    smoothed.0 = spline.position_at_progress(0.0);
 
     // Build path from spline samples
     let resolution = 200;
@@ -171,17 +176,14 @@ pub fn spawn_note_visual(commands: &mut Commands, entity: Entity, kind: &NoteKin
             spawn_slide_visual(commands, entity, *dir, SLIDE_COLOR, SLIDE_FILL, 14.0)
         }
         NoteKind::Hold { .. } => spawn_hold_visual(commands, entity),
-        NoteKind::AdLib => spawn_adlib_visual(commands, entity),
-        NoteKind::Beat => spawn_beat_visual(commands, entity),
-        NoteKind::Scratch => spawn_scratch_visual(commands, entity),
+        NoteKind::Rest => spawn_rest_visual(commands, entity),
         NoteKind::Critical => spawn_critical_visual(commands, entity),
-        NoteKind::DualSlide(a, b) => spawn_dual_slide_visual(commands, entity, *a, *b),
     }
 }
 
 fn spawn_tap_visual(commands: &mut Commands, parent: Entity) {
     let circle = shapes::Circle {
-        radius: 12.0,
+        radius: 14.0,
         center: Vec2::ZERO,
     };
     let shape = commands
@@ -231,12 +233,12 @@ fn spawn_slide_visual(
         .id();
 
     // Arrow
-    let arrow = arrow_path(dir.to_vec2(), 10.0);
+    let arrow = arrow_path(dir.to_vec2(), 12.0);
     let arrow_entity = commands
         .spawn((
             ArrowVisual,
             ShapeBuilder::with(&arrow)
-                .stroke((color, 1.5))
+                .stroke((color, 2.0))
                 .build(),
             Transform::from_translation(Vec3::Z * 1.1),
         ))
@@ -264,7 +266,7 @@ fn spawn_hold_visual(commands: &mut Commands, parent: Entity) {
         .id();
 
     let head_inner = shapes::Circle {
-        radius: 11.0,
+        radius: 12.0,
         center: Vec2::ZERO,
     };
     let inner = commands
@@ -292,92 +294,65 @@ fn spawn_hold_visual(commands: &mut Commands, parent: Entity) {
         .add_children(&[ribbon, outer, inner]);
 }
 
-fn spawn_adlib_visual(commands: &mut Commands, parent: Entity) {
+fn spawn_rest_visual(commands: &mut Commands, parent: Entity) {
+    let rest_color = Color::srgba(0.9, 0.9, 1.0, 0.3);
+
+    // Circle outline
     let circle = shapes::Circle {
-        radius: 10.0,
+        radius: 12.0,
         center: Vec2::ZERO,
     };
-    let child = commands
+    let circle_entity = commands
         .spawn((
             NoteVisual,
             ShapeBuilder::with(&circle)
-                .stroke((Color::srgba(0.9, 0.9, 1.0, 0.08), 1.5))
+                .stroke((rest_color, 1.5))
                 .build(),
             Transform::from_translation(Vec3::Z * 0.5),
         ))
         .id();
 
-    commands.entity(parent).add_children(&[child]);
-}
-
-fn spawn_beat_visual(commands: &mut Commands, parent: Entity) {
-    let inner_circle = shapes::Circle {
-        radius: 10.0,
-        center: Vec2::ZERO,
-    };
-    let inner = commands
+    // X diagonal 1: top-left to bottom-right
+    let x_size = 8.0;
+    let line1 = shapes::Line(Vec2::new(-x_size, x_size), Vec2::new(x_size, -x_size));
+    let line1_entity = commands
         .spawn((
             NoteVisual,
-            ShapeBuilder::with(&inner_circle)
-                .stroke((BEAT_COLOR, 2.0))
+            ShapeBuilder::with(&line1)
+                .stroke((rest_color, 1.5))
                 .build(),
-            Transform::from_translation(Vec3::Z * 1.0),
+            Transform::from_translation(Vec3::Z * 0.6),
         ))
         .id();
 
-    let outer_circle = shapes::Circle {
-        radius: 16.0,
-        center: Vec2::ZERO,
-    };
-    let outer = commands
+    // X diagonal 2: bottom-left to top-right
+    let line2 = shapes::Line(Vec2::new(-x_size, -x_size), Vec2::new(x_size, x_size));
+    let line2_entity = commands
         .spawn((
-            BeatOuterRing,
-            ShapeBuilder::with(&outer_circle)
-                .stroke((BEAT_COLOR, 1.5))
+            NoteVisual,
+            ShapeBuilder::with(&line2)
+                .stroke((rest_color, 1.5))
+                .build(),
+            Transform::from_translation(Vec3::Z * 0.6),
+        ))
+        .id();
+
+    commands.entity(parent).add_children(&[circle_entity, line1_entity, line2_entity]);
+}
+
+fn spawn_critical_visual(commands: &mut Commands, parent: Entity) {
+    // Glow halo — slightly larger star at low alpha
+    let halo = star_polygon(20.0, 10.0, 5);
+    let halo_entity = commands
+        .spawn((
+            CriticalHalo,
+            ShapeBuilder::with(&halo)
+                .stroke((Color::srgba(1.0, 0.95, 0.8, 0.25), 1.5))
                 .build(),
             Transform::from_translation(Vec3::Z * 0.9),
         ))
         .id();
 
-    commands.entity(parent).add_children(&[inner, outer]);
-}
-
-fn spawn_scratch_visual(commands: &mut Commands, parent: Entity) {
-    let disc = shapes::Circle {
-        radius: 13.0,
-        center: Vec2::ZERO,
-    };
-    let disc_entity = commands
-        .spawn((
-            NoteVisual,
-            ShapeBuilder::with(&disc)
-                .stroke((SCRATCH_COLOR, 2.0))
-                .build(),
-            Transform::from_translation(Vec3::Z * 1.0),
-        ))
-        .id();
-
-    let mut children = vec![disc_entity];
-    for i in 0..3u8 {
-        let angle = i as f32 * TAU / 3.0;
-        let d = Vec2::new(angle.cos(), angle.sin());
-        let line = shapes::Line(d * 10.0, d * 18.0);
-        let line_entity = commands
-            .spawn((
-                ScratchLine(i),
-                ShapeBuilder::with(&line)
-                    .stroke((SCRATCH_COLOR, 1.5))
-                    .build(),
-                Transform::from_translation(Vec3::Z * 1.1),
-            ))
-            .id();
-        children.push(line_entity);
-    }
-
-    commands.entity(parent).add_children(&children);
-}
-
-fn spawn_critical_visual(commands: &mut Commands, parent: Entity) {
     let star = star_polygon(16.0, 8.0, 5);
     let shape = commands
         .spawn((
@@ -390,52 +365,7 @@ fn spawn_critical_visual(commands: &mut Commands, parent: Entity) {
         ))
         .id();
 
-    commands.entity(parent).add_children(&[shape]);
-}
-
-fn spawn_dual_slide_visual(
-    commands: &mut Commands,
-    parent: Entity,
-    dir_a: SlideDirection,
-    dir_b: SlideDirection,
-) {
-    let diamond = diamond_polygon(18.0);
-    let shape = commands
-        .spawn((
-            NoteVisual,
-            ShapeBuilder::with(&diamond)
-                .fill(DUAL_SLIDE_FILL)
-                .stroke((DUAL_SLIDE_COLOR, 2.0))
-                .build(),
-            Transform::from_translation(Vec3::Z * 1.0),
-        ))
-        .id();
-
-    let arrow_a_path = arrow_path(dir_a.to_vec2(), 8.0);
-    let arrow_a = commands
-        .spawn((
-            ArrowVisual,
-            ShapeBuilder::with(&arrow_a_path)
-                .stroke((DUAL_SLIDE_COLOR, 1.5))
-                .build(),
-            Transform::from_translation(Vec3::Z * 1.1),
-        ))
-        .id();
-
-    let arrow_b_path = arrow_path(dir_b.to_vec2(), 8.0);
-    let arrow_b = commands
-        .spawn((
-            ArrowVisual,
-            ShapeBuilder::with(&arrow_b_path)
-                .stroke((DUAL_SLIDE_COLOR, 1.5))
-                .build(),
-            Transform::from_translation(Vec3::Z * 1.1),
-        ))
-        .id();
-
-    commands
-        .entity(parent)
-        .add_children(&[shape, arrow_a, arrow_b]);
+    commands.entity(parent).add_children(&[halo_entity, shape]);
 }
 
 // --- Feedback visual spawning ---
@@ -529,6 +459,8 @@ fn update_playhead_visual(
     conductor: Option<Res<SongConductor>>,
     playhead: Option<Res<Playhead>>,
     spline: Option<Res<SplinePath>>,
+    time: Res<Time>,
+    mut smoothed: ResMut<SmoothedPlayhead>,
     mut playhead_q: Query<&mut Transform, With<PlayheadVisual>>,
 ) {
     let Some(conductor) = conductor else { return };
@@ -536,10 +468,18 @@ fn update_playhead_visual(
     let Some(spline) = spline else { return };
 
     let progress = playhead.progress(conductor.current_beat);
-    let pos = spline.position_at_progress(progress);
+    let target = spline.position_at_progress(progress);
+
+    // On first frame (or after reset), snap directly to target
+    if smoothed.0 == Vec2::ZERO && target != Vec2::ZERO {
+        smoothed.0 = target;
+    }
+
+    let alpha = (PLAYHEAD_SMOOTHING * time.delta_secs()).min(1.0);
+    smoothed.0 = smoothed.0.lerp(target, alpha);
 
     for mut t in &mut playhead_q {
-        t.translation = pos.extend(t.translation.z);
+        t.translation = smoothed.0.extend(t.translation.z);
     }
 }
 
@@ -550,7 +490,6 @@ fn update_note_visuals(
             &SplineProgress,
             &NoteType,
             Option<&NoteDirection>,
-            Option<&DualSlideDirections>,
             &Children,
         ),
         With<NoteAlive>,
@@ -559,14 +498,13 @@ fn update_note_visuals(
     spline: Option<Res<SplinePath>>,
     mut transforms: Query<&mut Transform>,
     mut shapes: Query<&mut Shape>,
-    scratch_lines: Query<&ScratchLine>,
-    beat_rings: Query<&BeatOuterRing>,
     tangent_lines: Query<&TangentLine>,
+    critical_halos: Query<&CriticalHalo>,
 ) {
     let Some(spline) = spline else { return };
     let Some(conductor) = conductor else { return };
 
-    for (entity, progress, note_type, _note_dir, _dual_dirs, children) in &notes {
+    for (entity, progress, note_type, _note_dir, children) in &notes {
         let p = progress.0.min(1.0);
         let pos = spline.position_at_progress(p);
         let tangent = spline.tangent_at_progress(p).normalize_or_zero();
@@ -577,24 +515,6 @@ fn update_note_visuals(
         }
 
         for child in children.iter() {
-            // Scratch: spin lines
-            if let Ok(scratch) = scratch_lines.get(child) {
-                if let Ok(mut t) = transforms.get_mut(child) {
-                    let spin = conductor.current_beat as f32 * TAU * 2.0;
-                    let base_angle = scratch.0 as f32 * TAU / 3.0;
-                    t.rotation = Quat::from_rotation_z(spin + base_angle);
-                }
-            }
-
-            // Beat: pulse outer ring
-            if beat_rings.get(child).is_ok() {
-                if let Ok(mut t) = transforms.get_mut(child) {
-                    let pulse =
-                        1.0 + 0.15 * (conductor.current_beat as f32 * TAU * 2.0).sin();
-                    t.scale = Vec3::splat(pulse);
-                }
-            }
-
             // Tap: rotate tangent line toward path direction
             if tangent_lines.get(child).is_ok() {
                 if let Ok(mut t) = transforms.get_mut(child) {
@@ -602,11 +522,19 @@ fn update_note_visuals(
                     t.rotation = Quat::from_rotation_z(angle);
                 }
             }
+
+            // Critical: slow spin on the glow halo
+            if critical_halos.get(child).is_ok() {
+                if let Ok(mut t) = transforms.get_mut(child) {
+                    let spin = conductor.current_beat as f32 * TAU * 0.15;
+                    t.rotation = Quat::from_rotation_z(spin);
+                }
+            }
         }
 
-        // AdLib: pulse alpha
-        if matches!(note_type.0, NoteKind::AdLib) {
-            let pulse = 0.08 + 0.06 * (conductor.current_beat as f32 * TAU).sin().abs();
+        // Rest: gentle pulse alpha (0.25–0.35)
+        if matches!(note_type.0, NoteKind::Rest) {
+            let pulse = 0.25 + 0.10 * (conductor.current_beat as f32 * TAU).sin().abs();
             for child in children.iter() {
                 if let Ok(mut shape) = shapes.get_mut(child) {
                     if let Some(ref mut stroke) = shape.stroke {

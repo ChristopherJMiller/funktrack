@@ -81,25 +81,25 @@ const ZOOM_MAX: f32 = 2.0;
 const ROTATION_LIMIT_RAD: f32 = 30.0 * std::f32::consts::PI / 180.0;
 
 /// How far ahead of the playhead the camera looks (in spline progress units).
-const LOOK_AHEAD_OFFSET: f32 = 0.04;
+const LOOK_AHEAD_OFFSET: f32 = 0.06;
 /// Weight of look-ahead position vs playhead position (0.0 = all playhead, 1.0 = all look-ahead).
-const LOOK_AHEAD_WEIGHT: f32 = 0.35;
+const LOOK_AHEAD_WEIGHT: f32 = 0.40;
 
 /// Exponential smoothing factor for camera position (higher = snappier).
-const POSITION_SMOOTHING: f32 = 6.0;
+const POSITION_SMOOTHING: f32 = 10.0;
 /// Exponential smoothing factor for track-following rotation.
-const ROTATION_SMOOTHING: f32 = 3.0;
+const ROTATION_SMOOTHING: f32 = 5.0;
 /// Max angular speed in radians/sec to prevent jarring snaps.
-const MAX_ANGULAR_SPEED: f32 = 2.5;
+const MAX_ANGULAR_SPEED: f32 = 1.8;
 /// Rotation intensity: 0.0 = never rotate, 1.0 = full track-following.
 const ROTATION_INTENSITY: f32 = 0.6;
 
 /// Window (in progress units) over which we sample tangent change for curvature.
-const CURVATURE_SAMPLE_WINDOW: f32 = 0.02;
-/// When curvature exceeds this threshold, smoothing increases.
-const HIGH_CURVATURE_THRESHOLD: f32 = 1.5;
-/// Extra smoothing multiplier during high curvature.
-const CURVATURE_SMOOTHING_BOOST: f32 = 0.3;
+const CURVATURE_SAMPLE_WINDOW: f32 = 0.03;
+/// Curvature value at which smoothing starts easing off (soft knee).
+const CURVATURE_SOFT_KNEE: f32 = 1.0;
+/// Minimum smoothing multiplier at extreme curvature.
+const CURVATURE_MIN_FACTOR: f32 = 0.5;
 
 // --- Camera state resource ---
 
@@ -132,7 +132,7 @@ impl Default for CameraState {
             zoom_anim: None,
             pan_anim: None,
             rotate_anim: None,
-            event_zoom: 1.0,
+            event_zoom: 0.65,
             event_pan: Vec2::ZERO,
             event_rotation: 0.0,
             camera_position: Vec2::ZERO,
@@ -326,12 +326,14 @@ fn update_camera(
         // Blend playhead and look-ahead positions
         let target_pos = playhead_pos.lerp(look_ahead_pos, LOOK_AHEAD_WEIGHT);
 
-        // Compute curvature factor to increase smoothing on sharp turns
+        // Compute curvature factor — smooth falloff instead of binary switch
         let curvature = compute_curvature(&spline, progress);
-        let curvature_factor = if curvature > HIGH_CURVATURE_THRESHOLD {
-            CURVATURE_SMOOTHING_BOOST
-        } else {
+        let curvature_factor = if curvature <= CURVATURE_SOFT_KNEE {
             1.0
+        } else {
+            // Smoothly ease from 1.0 down to CURVATURE_MIN_FACTOR
+            let t = ((curvature - CURVATURE_SOFT_KNEE) / CURVATURE_SOFT_KNEE).min(1.0);
+            1.0 + (CURVATURE_MIN_FACTOR - 1.0) * t * t
         };
         let effective_smoothing = POSITION_SMOOTHING * curvature_factor;
 
@@ -350,12 +352,13 @@ fn update_camera(
             angle_diff = (angle_diff + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
                 - std::f32::consts::PI;
 
+            // Smooth first, then clamp — prevents stutter-then-drift
+            let rot_alpha = (ROTATION_SMOOTHING * dt).min(1.0);
+            let smoothed_diff = angle_diff * rot_alpha;
+
             // Cap angular speed
             let max_delta = MAX_ANGULAR_SPEED * dt;
-            let clamped_diff = angle_diff.clamp(-max_delta, max_delta);
-
-            let rot_alpha = (ROTATION_SMOOTHING * dt).min(1.0);
-            state.playhead_angle += clamped_diff * rot_alpha;
+            state.playhead_angle += smoothed_diff.clamp(-max_delta, max_delta);
         }
     }
 }

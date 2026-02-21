@@ -13,14 +13,11 @@ impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<TapInput>();
         app.add_message::<SlideInput>();
-        app.add_message::<ScratchInput>();
         app.add_message::<CriticalInput>();
-        app.add_message::<DualSlideInput>();
-        app.init_resource::<ScratchState>();
         app.init_resource::<CriticalDetector>();
         app.add_systems(
             Update,
-            (read_tap_input, read_slide_input, read_scratch_input, read_dual_slide_input, detect_critical_input)
+            (read_tap_input, read_slide_input, detect_critical_input)
                 .in_set(GameSet::ReadInput),
         );
     }
@@ -38,25 +35,8 @@ pub struct SlideInput {
 }
 
 #[derive(Message, Debug, Clone)]
-pub struct ScratchInput {
-    pub beat: f64,
-}
-
-#[derive(Message, Debug, Clone)]
 pub struct CriticalInput {
     pub beat: f64,
-}
-
-#[derive(Message, Debug, Clone)]
-pub struct DualSlideInput {
-    pub beat: f64,
-    pub dir_a: SlideDirection,
-    pub dir_b: SlideDirection,
-}
-
-#[derive(Resource, Default)]
-struct ScratchState {
-    prev_direction: Option<SlideDirection>,
 }
 
 #[derive(Resource, Default)]
@@ -115,65 +95,6 @@ fn read_slide_input(
         slide_writer.write(SlideInput {
             beat: conductor.current_beat,
             direction: slide_dir,
-        });
-    }
-}
-
-fn read_scratch_input(
-    action: Res<ActionState<GameAction>>,
-    conductor: Option<Res<SongConductor>>,
-    mut state: ResMut<ScratchState>,
-    mut scratch_writer: MessageWriter<ScratchInput>,
-) {
-    let Some(conductor) = conductor else { return };
-
-    // Read current directional state
-    let mut dir = Vec2::ZERO;
-    if action.pressed(&GameAction::Up) { dir.y += 1.0; }
-    if action.pressed(&GameAction::Down) { dir.y -= 1.0; }
-    if action.pressed(&GameAction::Right) { dir.x += 1.0; }
-    if action.pressed(&GameAction::Left) { dir.x -= 1.0; }
-
-    let current = SlideDirection::from_vec2(dir);
-
-    // Detect direction change (zero-crossing gesture)
-    if let (Some(prev), Some(curr)) = (state.prev_direction, current) {
-        if prev != curr {
-            scratch_writer.write(ScratchInput {
-                beat: conductor.current_beat,
-            });
-        }
-    }
-
-    state.prev_direction = current;
-}
-
-fn read_dual_slide_input(
-    action: Res<ActionState<GameAction>>,
-    conductor: Option<Res<SongConductor>>,
-    mut writer: MessageWriter<DualSlideInput>,
-) {
-    let Some(conductor) = conductor else { return };
-
-    let any_just = action.just_pressed(&GameAction::Up)
-        || action.just_pressed(&GameAction::Down)
-        || action.just_pressed(&GameAction::Left)
-        || action.just_pressed(&GameAction::Right);
-    if !any_just { return; }
-
-    // Collect all currently pressed cardinal directions
-    let mut pressed_dirs: Vec<SlideDirection> = Vec::new();
-    if action.pressed(&GameAction::Up) { pressed_dirs.push(SlideDirection::N); }
-    if action.pressed(&GameAction::Down) { pressed_dirs.push(SlideDirection::S); }
-    if action.pressed(&GameAction::Left) { pressed_dirs.push(SlideDirection::W); }
-    if action.pressed(&GameAction::Right) { pressed_dirs.push(SlideDirection::E); }
-
-    // Dual slide requires exactly 2 directions pressed simultaneously
-    if pressed_dirs.len() == 2 {
-        writer.write(DualSlideInput {
-            beat: conductor.current_beat,
-            dir_a: pressed_dirs[0],
-            dir_b: pressed_dirs[1],
         });
     }
 }

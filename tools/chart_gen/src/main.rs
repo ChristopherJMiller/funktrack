@@ -144,11 +144,8 @@ fn main() {
                     chart::ChartNoteType::Tap => "Tap",
                     chart::ChartNoteType::Hold { .. } => "Hold",
                     chart::ChartNoteType::Slide { .. } => "Slide",
-                    chart::ChartNoteType::Beat => "Beat",
-                    chart::ChartNoteType::Scratch => "Scratch",
                     chart::ChartNoteType::Critical => "Critical",
-                    chart::ChartNoteType::DualSlide { .. } => "DualSlide",
-                    chart::ChartNoteType::AdLib => "AdLib",
+                    chart::ChartNoteType::Rest => "Rest",
                     _ => "Other",
                 };
                 *type_counts.entry(name).or_insert(0u32) += 1;

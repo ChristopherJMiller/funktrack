@@ -77,14 +77,8 @@ pub enum NoteBrush {
     Tap,
     Hold { duration_beats: f64 },
     Slide { direction: crate::beatmap::SlideDirection },
-    Scratch,
-    Beat,
     Critical,
-    DualSlide {
-        left: crate::beatmap::SlideDirection,
-        right: crate::beatmap::SlideDirection,
-    },
-    AdLib,
+    Rest,
 }
 
 impl NoteBrush {
@@ -97,14 +91,8 @@ impl NoteBrush {
             NoteBrush::Slide { direction } => ChartNoteType::Slide {
                 direction: *direction,
             },
-            NoteBrush::Scratch => ChartNoteType::Scratch,
-            NoteBrush::Beat => ChartNoteType::Beat,
             NoteBrush::Critical => ChartNoteType::Critical,
-            NoteBrush::DualSlide { left, right } => ChartNoteType::DualSlide {
-                left: *left,
-                right: *right,
-            },
-            NoteBrush::AdLib => ChartNoteType::AdLib,
+            NoteBrush::Rest => ChartNoteType::Rest,
         }
     }
 
@@ -113,11 +101,8 @@ impl NoteBrush {
             NoteBrush::Tap => "TAP",
             NoteBrush::Hold { .. } => "HOLD",
             NoteBrush::Slide { .. } => "SLIDE",
-            NoteBrush::Scratch => "SCRATCH",
-            NoteBrush::Beat => "BEAT",
             NoteBrush::Critical => "CRITICAL",
-            NoteBrush::DualSlide { .. } => "DUAL SLIDE",
-            NoteBrush::AdLib => "AD-LIB",
+            NoteBrush::Rest => "REST",
         }
     }
 }
@@ -425,19 +410,13 @@ fn input_system(
         state.grid_snap = state.grid_snap.next();
     }
 
-    // ── Note brush shortcuts: 1-8 ──
-    let brush_keys: [(KeyCode, NoteBrush); 8] = [
+    // ── Note brush shortcuts: 1-5 ──
+    let brush_keys: [(KeyCode, NoteBrush); 5] = [
         (KeyCode::Digit1, NoteBrush::Tap),
         (KeyCode::Digit2, NoteBrush::Hold { duration_beats: 1.0 }),
         (KeyCode::Digit3, NoteBrush::Slide { direction: crate::beatmap::SlideDirection::E }),
-        (KeyCode::Digit4, NoteBrush::Scratch),
-        (KeyCode::Digit5, NoteBrush::Beat),
-        (KeyCode::Digit6, NoteBrush::Critical),
-        (KeyCode::Digit7, NoteBrush::DualSlide {
-            left: crate::beatmap::SlideDirection::W,
-            right: crate::beatmap::SlideDirection::E,
-        }),
-        (KeyCode::Digit8, NoteBrush::AdLib),
+        (KeyCode::Digit4, NoteBrush::Critical),
+        (KeyCode::Digit5, NoteBrush::Rest),
     ];
     for (key, brush) in brush_keys {
         if keys.just_pressed(key) {

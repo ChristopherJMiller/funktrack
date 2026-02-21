@@ -20,11 +20,8 @@ pub enum NoteKind {
     Tap,
     Slide(crate::beatmap::SlideDirection),
     Hold { end_beat: f64 },
-    AdLib,
-    Beat,
-    Scratch,
+    Rest,
     Critical,
-    DualSlide(crate::beatmap::SlideDirection, crate::beatmap::SlideDirection),
 }
 
 #[derive(Component)]
@@ -56,20 +53,9 @@ pub struct SplineProgress(pub f32);
 #[derive(Component)]
 pub struct NoteAlive;
 
-/// Marker for Ad-Lib notes: silently despawn on miss (no penalty).
+/// Marker for Rest notes: rewarded on pass, penalized on tap.
 #[derive(Component)]
-pub struct AdLibMarker;
-
-/// Tracks rapid tap count for Beat notes (needs 2+ taps to clear).
-#[derive(Component)]
-pub struct BeatTapCount {
-    pub count: u8,
-    pub first_tap_ms: f64,
-}
-
-/// Stores both directions for a Dual Slide note.
-#[derive(Component)]
-pub struct DualSlideDirections(pub crate::beatmap::SlideDirection, pub crate::beatmap::SlideDirection);
+pub struct RestMarker;
 
 // --- Resources ---
 
@@ -154,14 +140,8 @@ fn spawn_notes(
             NoteKind::Hold { end_beat } => {
                 commands.entity(entity).insert((HoldEndBeat(end_beat), HoldState::Pending));
             }
-            NoteKind::AdLib => {
-                commands.entity(entity).insert(AdLibMarker);
-            }
-            NoteKind::Beat => {
-                commands.entity(entity).insert(BeatTapCount { count: 0, first_tap_ms: 0.0 });
-            }
-            NoteKind::DualSlide(a, b) => {
-                commands.entity(entity).insert(DualSlideDirections(a, b));
+            NoteKind::Rest => {
+                commands.entity(entity).insert(RestMarker);
             }
             _ => {}
         }

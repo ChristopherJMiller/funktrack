@@ -83,12 +83,10 @@ fn pick_note_type(
                     }
                 }
             } else if is_rapid_pair(notes, idx) {
-                ChartNoteType::Beat
-            } else if roll < 20 {
+                ChartNoteType::Tap
+            } else if roll < 25 {
                 let dir = pick_slide_direction(note.beat, rng);
                 ChartNoteType::Slide { direction: dir }
-            } else if roll < 25 {
-                ChartNoteType::Scratch
             } else {
                 ChartNoteType::Tap
             }
@@ -108,26 +106,18 @@ fn pick_note_type(
                     }
                 }
             } else if is_rapid_pair(notes, idx) {
-                ChartNoteType::Beat
+                ChartNoteType::Tap
             } else if roll < 20 {
                 let dir = pick_slide_direction(note.beat, rng);
                 ChartNoteType::Slide { direction: dir }
             } else if roll < 28 {
-                ChartNoteType::Scratch
+                let dir = pick_slide_direction(note.beat, rng);
+                ChartNoteType::Slide { direction: dir }
             } else if roll < 33 {
-                // Dual slide
-                let left = pick_slide_direction(note.beat, rng);
-                let right = pick_slide_direction(note.beat + 0.5, rng);
-                // Ensure different directions
-                let right = if right == left {
-                    SlideDirection::ALL[((left as usize) + 2) % 8]
-                } else {
-                    right
-                };
-                ChartNoteType::DualSlide { left, right }
+                ChartNoteType::Critical
             } else if roll < 38 && note.strength < 0.3 {
-                // Low-strength off-beat notes become ad-libs
-                ChartNoteType::AdLib
+                // Low-strength off-beat notes become rests
+                ChartNoteType::Rest
             } else {
                 ChartNoteType::Tap
             }
